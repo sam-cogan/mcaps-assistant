@@ -50,7 +50,7 @@ Cache probe results for the session. Two-medium answers are acceptable; single-m
 - For write-intent flows → `.github/instructions/msx-role-and-write-gate.instructions.md`
 - **Deal team**: Not retrievable via MCP tools. See `crm-entity-schema.instructions.md` § "Deal Team".
 
-**WorkIQ**: Narrow scope before retrieval. See `.github/skills/WorkIQ_Query_Scoping_SKILL.md`. Resolve role first, then apply scoping.
+**WorkIQ**: Narrow scope before retrieval. See `.github/skills/workiq-query-scoping-SKILL.md`. Resolve role first, then apply scoping.
 
 **Vault (OIL)**: Knowledge store for customer context and durable memory. See `.github/instructions/obsidian-vault.instructions.md`. If unavailable, operate statelessly (CRM-only).
 

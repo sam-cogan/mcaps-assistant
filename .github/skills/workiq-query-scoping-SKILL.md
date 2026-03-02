@@ -9,12 +9,15 @@ argument-hint: 'Paste the user request and any known constraints (people, custom
 ## Purpose
 Convert broad WorkIQ asks into focused retrieval plans that minimize noise, latency, and accidental overreach while preserving user intent.
 
+## Freedom Level
+**Medium** — applies safe defaults for ambiguous scope but confirms boundaries before retrieval crosses customers or sensitive sources.
+
 ## MCP Tooling
-- Primary retrieval tool: WorkIQ MCP `ask_work_iq`.
+- Primary retrieval tool: `workiq:ask_work_iq`.
 - If EULA is required by environment policy, complete acceptance before retrieval.
 - Keep CRM reads/writes in `msx-crm`; use WorkIQ for M365 evidence retrieval only.
-- **Seed fact map from CRM before retrieval**: call `get_my_active_opportunities(customerKeyword)` to resolve customer/opportunity context and populate entities, then use those names in WorkIQ queries for precise scoping.
-- **Seed fact map from vault People notes**: before retrieval, query vault People notes (`search_notes` with tag `people`) to build a people→customer lookup. Use frontmatter fields `customers`, `company`, and `org` to pre-map known contacts to accounts. This enables automatic customer attribution when WorkIQ results mention those people.
+- **Seed fact map from CRM before retrieval**: call `msx-crm:get_my_active_opportunities(customerKeyword)` to resolve customer/opportunity context and populate entities, then use those names in WorkIQ queries for precise scoping.
+- **Seed fact map from vault People notes**: before retrieval, query vault People notes (`oil:search_vault` with tag `people`) to build a people→customer lookup. Use frontmatter fields `customers`, `company`, and `org` to pre-map known contacts to accounts. This enables automatic customer attribution when WorkIQ results mention those people.
 
 ## When to Use
 - User asks for broad retrieval across Microsoft 365 sources (for example meetings + chats + files + emails).
@@ -49,9 +52,9 @@ Build a short fact map before retrieval:
 ### Pass 1: Discovery
 - Run narrow, low-cost retrieval to validate relevance.
 - Prefer filters in this order: time window → entities → source types → keywords.
-- **Date boundary enforcement**: Always include explicit date boundaries in every `ask_work_iq` prompt. Never let a query run without a stated time window. If the user said "today", use today's ISO date only — do not silently include yesterday or tomorrow.
+- **Date boundary enforcement**: Always include explicit date boundaries in every `workiq:ask_work_iq` prompt. Never let a query run without a stated time window. If the user said "today", use today's ISO date only — do not silently include yesterday or tomorrow.
 - Output candidate set only (threads/transcripts/files ids or references).
-- Prefer one `ask_work_iq` prompt per source family to keep results attributable.
+- Prefer one `workiq:ask_work_iq` prompt per source family to keep results attributable.
 
 ### Entity Resolution (between Pass 1 and Vault Correlation)
 After Pass 1 returns candidate results, resolve the people and entities mentioned into customer/account associations. This is the critical step that connects M365 activity back to specific customers.
@@ -69,7 +72,7 @@ If OIL is available:
 
 **Step 3 — Resolve via CRM.**
 For people not found in vault, or to validate/enrich vault associations:
-1. Query `crm_query` against `systemusers` by `fullname` or `internalemailaddress` to get their `systemuserid`.
+1. Query `msx-crm:crm_query` against `systemusers` by `fullname` or `internalemailaddress` to get their `systemuserid`.
 2. Query `opportunities` filtered by `_ownerid_value` to find which opportunities/accounts they're aligned to.
 3. Query `msp_engagementmilestones` filtered by `_ownerid_value` for milestone-level alignment.
 4. Resolve the parent account from the opportunity's `_parentaccountid_value`.
@@ -92,7 +95,7 @@ If a candidate maps to multiple customers with equal confidence, or if key parti
 ### Pass 2: Deep Retrieval
 - Retrieve full detail only for candidates matched in Pass 1.
 - Exclude unmatched sources to reduce noise and token load.
-- Use targeted `ask_work_iq` prompts that explicitly cite selected candidates and exclusions.
+- Use targeted `workiq:ask_work_iq` prompts that explicitly cite selected candidates and exclusions.
 - **Group by customer**: organize retrieval and output by resolved customer attribution from Entity Resolution. This ensures results are presented in account context, not as a flat undifferentiated list.
 - For multi-customer candidates, retrieve once but present findings under each relevant customer.
 
@@ -114,7 +117,7 @@ Produce:
 - State assumptions explicitly whenever defaults are applied.
 - Prefer concise summaries with links/references over raw transcript dumps unless explicitly requested.
 
-## Suggested Prompt Skeleton for `ask_work_iq`
+## Suggested Prompt Skeleton for `workiq:ask_work_iq`
 - Goal: what decision/output is needed.
 - Scope: customer/account/opportunity + named people/entities (include resolved customer associations from entity resolution).
 - Time window: explicit dates.
