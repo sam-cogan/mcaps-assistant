@@ -42,7 +42,7 @@ Retrieves and assembles customer context from the Obsidian vault to support CRM 
 
 - Vault data supplements CRM — never contradicts CRM entity state
 - If vault data is stale (>30 days since last update), flag but still use
-- CRM prefetch from vault reduces query volume for `crm_query` calls
+- CRM prefetch from vault reduces query volume for `msx-crm:crm_query` calls
 - Missing vault data is not blocking — CRM is the source of truth
 
 ## Output Schema

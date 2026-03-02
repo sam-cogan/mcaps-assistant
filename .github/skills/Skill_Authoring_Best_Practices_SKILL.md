@@ -147,6 +147,47 @@ skill-name/
 5. **Retest** — verify the fix on the original failing case AND existing passing cases.
 6. **Repeat** — each cycle improves based on observed behavior, not assumptions.
 
+## MCEM Atomic Skill Template
+
+For MSX/MCEM domain skills, use this standardized structure:
+
+```markdown
+---
+name: <kebab-case-noun-or-gerund>
+description: '<What it does> for <role(s)> at MCEM <Stage(s)>. <When to trigger>. Triggers: <keyword list>.'
+argument-hint: '<What the user should provide>'
+---
+
+## Purpose
+1–2 sentences.
+
+## Freedom Level
+**Medium** | **Low** (for write-intent) — with rationale.
+
+## Trigger
+Bullet list of activation scenarios.
+
+## Flow
+1. Numbered steps with `msx-crm:tool_name` MCP tool calls.
+2. ...
+
+## Decision Logic
+Classification rules, pass/fail criteria, or conditional branching.
+
+## Output Schema
+- `key_field`: description
+- `next_action`: "Description. <Role> should run `next-skill-name` — recommend engaging <role>."
+```
+
+**Key conventions**:
+- **Stage-bound skills** must include `next_action` naming the logical next skill
+- **Cross-role chains** must name the owning role and recommend engagement (never auto-invoke)
+- **Role cards** (Tier 1) provide the role-specific lens over generic skills — don't embed role logic in skills
+- **Target 30–80 lines** per atomic skill; challenge every paragraph for token cost
+- Include role names and MCEM stage numbers in `description` for routing
+
+---
+
 ## Anti-Patterns Reference
 
 | Anti-Pattern | Fix |
@@ -161,3 +202,5 @@ skill-name/
 | Windows-style paths | Use forward slashes everywhere |
 | Assuming tools/packages installed | Explicitly list dependencies |
 | Unqualified MCP tool names | Use `ServerName:tool_name` format |
+| Cross-role next_action without role name | Always name the owning role in cross-role chains |
+| Role-specific logic in generic skill | Move to role card cross-role skill lens table |

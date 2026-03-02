@@ -50,4 +50,4 @@ Prevents premature milestone commitment by validating that delivery readiness ev
 - `commit_readiness_result`: pass | fail | partial
 - `missing_readiness_evidence`: list of specific gaps
 - `gate_remediation_actions`: dry-run task payloads
-- `next_action`: If pass → suggest `handoff-readiness-validation` for STU→CSU transition. If fail → name the specific remediation skill or action.
+- `next_action`: If pass → "Commit gate passed. Specialist should run `handoff-readiness-validation` for STU→CSU transition — recommend engaging the Specialist." If fail → name the specific remediation skill or action with owning role.

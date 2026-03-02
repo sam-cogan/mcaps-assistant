@@ -51,4 +51,4 @@ Keeps milestone tasks current and actionable by detecting missing owners, stale 
 - `task_report`: milestone-level task hygiene status
 - `stale_tasks`: tasks needing update with specific gap
 - `proposed_corrections`: dry-run create/update/close payloads
-- `next_action`: context-dependent — "Would you like to run `handoff-readiness-validation` for milestones approaching commitment?" or "Task hygiene complete — no escalation needed."
+- `next_action`: context-dependent — "Specialist should run `handoff-readiness-validation` for milestones approaching commitment — recommend engaging the Specialist." or "Task hygiene complete — no escalation needed."

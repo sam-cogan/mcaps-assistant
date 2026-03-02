@@ -48,4 +48,4 @@ Ensures customer outcomes are explicitly defined, measurable, and documented in 
 - `outcome_definitions`: list of scoped outcomes with metrics and timelines
 - `clarity_gaps`: missing elements per outcome
 - `draft_actions`: dry-run task payloads for gap closure
-- `next_action`: "Outcomes scoped. Would you like to run `pipeline-qualification` to validate opportunity readiness for Stage 2?"
+- `next_action`: "Outcomes scoped. Specialist should run `pipeline-qualification` to validate opportunity readiness for Stage 2 — recommend engaging the Specialist."

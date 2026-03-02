@@ -49,4 +49,4 @@ Defines the technical proof plan by scoping proof type (POC/Pilot/Demo), success
 - `proof_plan`: type, scope, success criteria, timeline, roles
 - `milestone_structure`: recommended milestones with tasks
 - `dry_run_actions`: milestone/task payloads
-- `next_action`: "Proof plan defined. Would you like to run `architecture-feasibility-check` to validate technical executability?"
+- `next_action`: "Proof plan defined. CSA should run `architecture-feasibility-check` to validate technical executability — would you like to engage your CSA?"

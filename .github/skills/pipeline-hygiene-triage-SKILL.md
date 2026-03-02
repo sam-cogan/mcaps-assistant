@@ -49,4 +49,4 @@ Detects and prioritizes pipeline hygiene exceptions across active Stage 2–3 op
 - `exceptions`: prioritized list with severity, reason, and affected milestone
 - `proposed_field_updates`: dry-run payloads for corrections
 - `escalation_path`: who to engage (SE, CSA, CSAM, partner) per exception
-- `next_action`: "Pipeline reviewed. Would you like to run `commit-gate-enforcement` for milestones approaching commitment?"
+- `next_action`: "Pipeline reviewed. CSA/CSAM should run `commit-gate-enforcement` for milestones approaching commitment — recommend engaging the CSU team."
