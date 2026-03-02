@@ -45,7 +45,7 @@ An [MCP](https://modelcontextprotocol.io/) server that turns an Obsidian vault i
 
 ```bash
 git clone <repo-url>
-cd obsidian-mcp-v2
+cd obsidian-intelligence-layer
 npm install
 npm run build
 ```
@@ -69,7 +69,7 @@ The server communicates over **stdio** (stdin/stdout). You don't hit it with cur
       "type": "stdio",
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "/absolute/path/to/obsidian-mcp-v2",
+      "cwd": "/absolute/path/to/obsidian-intelligence-layer",
       "env": {
         "OBSIDIAN_VAULT_PATH": "/absolute/path/to/your/obsidian/vault"
       }
@@ -86,7 +86,7 @@ The server communicates over **stdio** (stdin/stdout). You don't hit it with cur
     "oil": {
       "type": "stdio",
       "command": "node",
-      "args": ["/absolute/path/to/obsidian-mcp-v2/dist/index.js"],
+      "args": ["/absolute/path/to/obsidian-intelligence-layer/dist/index.js"],
       "env": {
         "OBSIDIAN_VAULT_PATH": "/absolute/path/to/your/obsidian/vault"
       }
