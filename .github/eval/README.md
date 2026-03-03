@@ -1,16 +1,15 @@
-# Skill Routing Evaluation
+# Context Routing Evaluation (CI/CD)
 
-Static analysis framework that measures how well VS Code Copilot's skill routing
-matches user queries to the correct skill files, comparing the **monolithic** (main)
-architecture against the **atomic** (branch) architecture.
+CI/CD evaluation framework that validates skill/instruction routing accuracy
+against a baseline (main branch). Runs on every PR to catch regressions
+before they merge.
 
 ## How it works
 
-1. Loads skill file frontmatter (`name`, `description`, `argument-hint`) from both architectures
-2. Computes sentence embeddings for every skill description and every test query
-3. Ranks skills by cosine similarity for each query
-4. Compares rankings against expected results → Precision, Recall, F1, MRR
-5. Reports context budget (lines loaded) per architecture
+1. Loads skill & instruction frontmatter from two git refs (main vs HEAD)
+2. Computes sentence embeddings for skill descriptions and test queries
+3. Ranks skills by cosine similarity → Precision, Recall, F1, MRR
+4. Compares metrics between refs; fails CI if F1 regresses
 
 **Model**: `Xenova/all-MiniLM-L6-v2` (~23 MB, runs locally via `@xenova/transformers`)
 
@@ -19,22 +18,42 @@ architecture against the **atomic** (branch) architecture.
 ```bash
 cd .github/eval
 npm install          # first time only
-npm run eval         # compare both architectures (default)
+npm run ci           # run all lint + confusion gates
+npm run ci:full      # lint + confusion + cross-branch regression
 ```
 
-## Commands
+## CI Pipeline (2 tiers)
+
+### Tier 1: Fast lint gates (no model download)
 
 | Command | Description |
 |---|---|
-| `npm run eval` | Compare main vs branch (side-by-side) |
-| `npm run eval:main` | Evaluate main (monolithic) only |
-| `npm run eval:branch` | Evaluate branch (atomic) only |
-| `npm run eval:compare` | Same as `npm run eval` |
-| `npm run sweep` | Threshold sensitivity sweep (0.20–0.50) |
+| `npm run lint` | Skill description quality (length, keywords, fields) |
+| `npm run lint:all` | Lint all skills including legacy |
+| `npm run lint:inst` | Instruction description quality |
+| `npm run lint:cross` | Instructions + cross-check skill ↔ instruction overlap |
+| `npm run lint:context` | Context health: discovery, routing, token budgets |
+| `npm run lint:context:json` | Context health as JSON (CI artifact) |
+| `npm run lint:context:budget` | Token budget analysis only |
+
+### Tier 2: Embedding-based gates (downloads model ~23MB)
+
+| Command | Description |
+|---|---|
 | `npm run confusion` | Pairwise skill similarity / confusion matrix |
-| `npm run lint` | Description quality linter (branch skills) |
-| `npm run lint:all` | Lint branch + legacy skills |
-| `npm run all` | Run eval + sweep + confusion + lint in sequence |
+| `npm run confusion:ci` | Confusion matrix with CI exit code |
+| `npm run compare` | Cross-branch routing comparison (verbose) |
+| `npm run compare:brief` | Cross-branch comparison (summary only) |
+| `npm run compare:ci` | Cross-branch with CI exit code (fails on regression) |
+| `npm run compare:skills` | Skills only |
+| `npm run compare:tools` | Tools only |
+
+### Composite CI commands
+
+| Command | Steps |
+|---|---|
+| `npm run ci` | lint descriptions + lint instructions + context check + confusion |
+| `npm run ci:full` | `ci` + cross-branch regression check |
 
 ## Configuration
 
@@ -42,8 +61,14 @@ npm run eval         # compare both architectures (default)
 |---|---|---|
 | `THRESHOLD` | `0.35` | Minimum cosine similarity to count a skill as "selected" |
 | `TOP_K` | `5` | Max skills shown per test case |
+| `F1_REGRESSION_LIMIT` | `0.05` | Max allowed avg F1 drop before CI fails |
+| `MAX_CONFUSION_PAIRS` | `5` | Max confusion pairs before CI fails |
+| `MAX_SKILL_BODY_TOKENS` | `800` | Per-skill body ceiling |
+| `MAX_INST_BODY_TOKENS` | `3500` | Per-instruction body ceiling |
+| `MAX_CATALOG_TOKENS` | `6000` | Total catalog metadata ceiling |
+| `MAX_TURN_TOKENS` | `25000` | Worst-case single turn ceiling |
 
-Example: `THRESHOLD=0.40 TOP_K=3 npm run eval`
+Example: `THRESHOLD=0.40 F1_REGRESSION_LIMIT=0.10 npm run compare:ci`
 
 ## Metrics
 
@@ -53,55 +78,8 @@ Example: `THRESHOLD=0.40 TOP_K=3 npm run eval`
 | **Recall** | Fraction of expected skills that were selected |
 | **F1** | Harmonic mean of Precision and Recall |
 | **MRR** | Mean Reciprocal Rank — how quickly the first expected skill appears |
-| **Lines loaded** | Total lines across all selected skills (context budget proxy) |
 
-## Output symbols
-
-- `✓` — expected skill, above threshold (true positive)
-- `●` — above threshold but not in expected list
-- ` ` — below threshold
-
-## Test case categories
-
-| Category | IDs | What it tests |
-|---|---|---|
-| Role-specific | `csam-*`, `se-*`, `spec-*`, `csa-*` | Correct skill for a known role + stage |
-| Multi-skill | `multi-*` | Query should trigger >1 skill |
-| Negative | `neg-*` | Off-topic query → 0 skills selected |
-| Ambiguous | `ambig-*` | Role-neutral query → best-match routing |
-| Confusion | `confuse-*` | Adjacent-skill discrimination |
-| Semantic | `semantic-*` | No keyword overlap → pure semantic match |
-
-## Threshold sweep
-
-```bash
-npm run sweep                 # default: 0.20–0.50, step 0.05
-node threshold-sweep.mjs 0.25 0.45 0.05  # custom range
-```
-
-Outputs a table showing how Precision/Recall/F1 change at each threshold
-for both architectures. Use this to find the optimal operating point.
-
-## Confusion matrix
-
-```bash
-npm run confusion             # default warn threshold: 0.55
-node confusion-matrix.mjs --warn 0.50  # custom
-```
-
-Computes pairwise cosine similarity between all skill descriptions.
-High-similarity pairs (above `--warn`) are flagged as confusion risks.
-
-## Description linter
-
-```bash
-npm run lint                  # branch skills only
-npm run lint:all              # branch + legacy
-```
-
-Checks: missing fields, description length, keyword density, token overlap.
-
-## Adding test cases
+## Test case format
 
 Edit `test-cases.yaml`. Each case needs:
 
@@ -110,16 +88,46 @@ Edit `test-cases.yaml`. Each case needs:
   query: "Natural language user query"
   role: CSAM | CSA | SE | Specialist | any
   stage: 1-5 | any
-  expected:
-    main: [MonolithicFile_SKILL.md]
-    branch: [atomic-skill-SKILL.md]
-  not_expected_branch:          # optional — flags false positives
-    - unrelated-skill-SKILL.md
+  category: confusion | semantic | negative  # optional
+  expected:                      # flat array of skill files
+    - skill-name/SKILL.md
+  expected_tools:                # optional — tool routing
+    - tool_name
+  not_expected:                  # optional — flags false positives
+    - unrelated-skill/SKILL.md
 ```
+
+### Test case categories
+
+| Category | IDs | What it tests |
+|---|---|---|
+| Role-specific | `csam-*`, `se-*`, `spec-*`, `csa-*` | Correct skill for a known role + stage |
+| Cross-role | `cross-*` | Multiple roles involved |
+| Multi-skill | `multi-*` | Query should trigger >1 skill |
+| Negative | `neg-*` | Off-topic query → 0 skills selected |
+| Ambiguous | `ambig-*` | Role-neutral query → best-match routing |
+| Confusion | `confuse-*` | Adjacent-skill discrimination |
+| Semantic | `semantic-*` | No keyword overlap → pure semantic match |
+
+## GitHub Actions
+
+Runs automatically via `.github/workflows/lint-context.yml` on PRs and pushes
+that touch `.github/skills/`, `.github/instructions/`, or `.github/eval/`.
+
+- **Tier 1** (lint gates): Every PR and push to main
+- **Tier 2** (regression): PRs only — compares `origin/main` vs `HEAD`
 
 ## Limitations
 
 - Embedding similarity is a **proxy** for VS Code's actual routing algorithm
-- Does not test `applyTo` glob matching (Tier 1 instructions)
-- Model quality affects results; different models may yield different rankings
+- Does not test `applyTo` glob matching (description-based matching only)
+- Token estimates are heuristic (~1.3 tokens/word); use for relative comparisons
 - Threshold tuning required; 0.35 is a reasonable starting point for MiniLM
+
+## Iteration workflow
+
+1. Edit skill/instruction descriptions
+2. `npm run loading` — check if token budget improved
+3. `npm run lint:cross` — verify no new confusion introduced
+4. `npm run confusion` — check pairwise similarity
+5. `npm run sweep` — find optimal threshold for new descriptions
