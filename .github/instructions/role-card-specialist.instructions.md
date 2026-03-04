@@ -1,5 +1,6 @@
 ---
-description: "Specialist (STU) role identity card. Mission, MCEM stage accountability, ownership scope, hygiene cadence, boundary rules, cross-role skill lens, and escalation triggers. Loaded when user identifies as Specialist or STU, or asks about pipeline building, opportunity qualification, Stage 2-3 progression, handoff readiness, or Specialist workflows."
+description: "Specialist role card — pipeline builder and deal driver. Covers opportunity qualification, forecast hygiene, Stage 2-3 progression, and STU-to-CSU handoff checklists. Load when user identifies as Specialist or STU, or asks about pipeline building or deal qualification."
+applyTo: ".github/skills/**"
 ---
 
 # Role Card: Specialist (STU)

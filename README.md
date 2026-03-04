@@ -1,5 +1,6 @@
 # MCAPS Copilot Tools
-![alt text](./docs/assets/banner.png)
+
+![alt text](docs/assets/banner.png)
 > **Your AI-powered sales operations toolkit for MCAPS.**
 > Talk to Copilot in plain English to manage MSX opportunities, milestones, and tasks — no coding required.
 
@@ -15,13 +16,15 @@ MCAPS Copilot Tools connects GitHub Copilot (in VS Code) to your MSX CRM and Mic
 ---
 
 ## Quick Start (5 Minutes)
+![alt text](docs/assets/quickstart.png)
 
 > **Prerequisites:**
 > - **Connected to the Microsoft corporate VPN** (required to reach internal CRM endpoints)
 > - A **Microsoft corp account** (used for `az login` authentication)
-> - A GitHub Copilot-compatible IDE such as [VS Code](https://code.visualstudio.com/) (or [VS Code Insiders](https://code.visualstudio.com/insiders/)) with the [GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat), **or** the [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/installing-github-copilot-in-the-cli)
+> - A GitHub Copilot-compatible IDE such as [VS Code](https://code.visualstudio.com/) (or [VS Code Insiders](https://code.visualstudio.com/insiders/)) with the [GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat), **or** [GitHub Copilot CLI](https://github.com/features/copilot/cli/) (`brew install copilot-cli`)
 > - [Node.js 18+](https://nodejs.org/)
 > - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
+
 
 ### Step 1: Clone and install
 ```bash
@@ -47,12 +50,20 @@ az login
 
 > **Important:** You must be on the corporate VPN and use a Microsoft account (e.g., `your-alias@microsoft.com`). Personal or third-party accounts will not have access to MSX CRM.
 
-### Step 3: Open the repo in VS Code
+### Step 3: Open the repo in VS Code — or Copilot CLI
 
+**Option A: VS Code**
 ```bash
 # from the repo root
 code .
 ```
+
+**Option B: [GitHub Copilot CLI](https://github.com/features/copilot/cli/)**
+```bash
+# from the repo root — starts a terminal-native agentic session
+copilot
+```
+Copilot CLI automatically detects `.vscode/mcp.json`, `AGENTS.md`, and `.github/skills/` in the repo. If using the CLI, skip Steps 4–5 — the MCP servers start on demand and you can begin prompting immediately. See [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli) for install and usage details.
 
 ### Step 4: Start the MCP servers
 
@@ -63,6 +74,76 @@ code .
 ### Step 5: Open Copilot and start chatting
 
 Open the GitHub Copilot chat panel (`Ctrl+Shift+I` / `Cmd+Shift+I`) and try one of the example prompts below.
+
+---
+
+## Alternative: Use with GitHub Copilot CLI
+
+[GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a terminal-native agentic coding agent that supports MCP servers, custom agents, and skills — the same ones in this repo. You can run the full MCAPS toolkit from your shell without opening VS Code.
+
+### Install Copilot CLI
+
+```bash
+# macOS
+brew install copilot-cli
+
+# or via npm
+npm install -g @github/copilot
+```
+
+> Included in Copilot Free, Pro, Pro+, Business, and Enterprise subscriptions. See the [documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli) for setup details.
+
+### Prerequisites
+
+- Azure CLI signed in (same as the VS Code flow — **VPN required**):
+  ```bash
+  az login
+  ```
+- Dependencies installed (`mcp/msx/` and optionally `mcp/oil/`)
+
+### How it works with this repo
+
+Copilot CLI automatically picks up the project's configuration when you run it from the repo root:
+
+- **MCP servers** — reads `.vscode/mcp.json` and connects to the same `msx-crm`, `workiq`, and `oil` servers.
+- **AGENTS.md** — loads the agent instructions from the repo root.
+- **Skills & instructions** — loads `.github/skills/` and `.github/instructions/` the same way VS Code does, matching by keyword.
+
+### Run it
+
+```bash
+cd mcaps-copilot-tools
+
+# Start Copilot CLI — it will detect the MCP servers and agent config
+copilot
+
+# Then use slash commands inside the session:
+#   /plan    — outline work before executing
+#   /model   — switch between models
+#   /fleet   — parallelize across subagents
+#   /agent   — select a custom agent
+#   /skills  — browse available skills
+#   /resume  — pick up a previous session
+```
+
+### Example prompts (same as VS Code)
+
+Once inside a Copilot CLI session, use the same natural language prompts:
+
+```
+Who am I in MSX?
+Show me my active opportunities.
+Run my weekly pipeline review — what needs cleanup across my Stage 2 and 3 opps?
+How are my committed milestones doing?
+```
+
+Write operations still use the Stage → Review → Execute pattern and require your explicit approval.
+
+### CLI ↔ IDE handoff
+
+Copilot CLI supports seamless handoff to VS Code. Start with `/plan` in the terminal, then use the CLI-to-IDE flow to continue refining in your editor — or go the other direction.
+
+> **Tip:** If you primarily work in the terminal, Copilot CLI gives you the same MCP tools, role-aware skills, and safety guardrails as the VS Code experience — just in your shell.
 
 ---
 
@@ -216,7 +297,7 @@ OIL exposes **22 domain-specific tools** including `get_customer_context`, `sear
 ---
 
 ## Project Layout
-
+![alt text](docs/assets/project-layout.png)
 | Folder | What's inside | Editable? |
 |---|---|---|
 | `.github/copilot-instructions.md` | Global Copilot behavior — the "system prompt" | **Yes** — your main customization lever |
@@ -232,12 +313,11 @@ OIL exposes **22 domain-specific tools** including `get_customer_context`, `sear
 
 ## What's Included
 
-### MSX CRM MCP Tools
+<details>
+<summary><strong>MSX CRM MCP Tools</strong> — read/write MSX opportunities, milestones, and tasks</summary>
 
 These tools let Copilot interact with MSX CRM on your behalf:
 
-| Tool | What it does |
-|---|---|
 | Tool | What it does |
 |---|---|
 | `crm_whoami` | Checks who you are in MSX (validates authentication) |
@@ -252,7 +332,10 @@ These tools let Copilot interact with MSX CRM on your behalf:
 | `update_task` / `close_task` | ⚠️ Updates or closes an existing task *(write — staged)* |
 | `update_milestone` | ⚠️ Updates milestone status or details *(write — staged)* |
 
-### Role Cards & Atomic Skills
+</details>
+
+<details>
+<summary><strong>Role Cards & Atomic Skills</strong> — 4 role cards + 27 domain skills, auto-loaded by keyword</summary>
 
 The system uses **role cards** (identity and accountability rules) combined with **27 atomic skills** (focused domain playbooks). Role cards live in `.github/instructions/` and are loaded by keyword match; atomic skills live in `.github/skills/` and are loaded on demand.
 
@@ -276,7 +359,10 @@ The system uses **role cards** (identity and accountability rules) combined with
 
 You don't need to memorize these — just tell Copilot your role and it will load the right card and activate relevant skills automatically.
 
-### WorkIQ (M365 Evidence Retrieval)
+</details>
+
+<details>
+<summary><strong>WorkIQ (M365 Evidence Retrieval)</strong> — search Teams, Outlook, Meetings, and SharePoint</summary>
 
 WorkIQ connects Copilot to your Microsoft 365 data. It can search across:
 
@@ -286,6 +372,67 @@ WorkIQ connects Copilot to your Microsoft 365 data. It can search across:
 - **SharePoint/OneDrive** — latest proposal/design docs and revision context
 
 Learn more: [WorkIQ overview (Microsoft Learn)](https://learn.microsoft.com/en-us/microsoft-365-copilot/extensibility/workiq-overview)
+
+</details>
+
+<details>
+<summary><strong>OIL — Obsidian Intelligence Layer</strong> — persistent knowledge graph from your local Obsidian vault (optional)</summary>
+
+[OIL](mcp/oil/README.md) turns your local [Obsidian](https://obsidian.md/) vault into a durable, queryable knowledge layer for the agent. Without it, the system works — but statelessly. With it, Copilot gains **persistent memory** across sessions: customer context, meeting history, relationship maps, and accumulated insights.
+
+**Why Obsidian?**
+- **100% local** — your notes never leave your machine. No cloud sync required.
+- **Graph-based** — Obsidian's wikilink model gives OIL a pre-built relationship graph (people ↔ customers ↔ meetings ↔ projects) queryable in O(1) via a pre-indexed backlink map.
+- **Markdown-native** — plain `.md` files you own forever. No proprietary format, no vendor lock-in.
+- **Works offline** — Obsidian doesn't even need to be running. OIL reads the vault folder directly.
+
+**What OIL provides (22 tools):**
+
+| Category | Tools | Purpose |
+|---|---|---|
+| **Orient** | `get_vault_context`, `get_customer_context`, `get_person_context`, `query_graph`, `resolve_people_to_customers` | Understand who/what/where before querying CRM |
+| **Retrieve** | `search_vault`, `query_notes`, `find_similar_notes` | 3-tier search: lexical → fuzzy → semantic embeddings |
+| **Write** | `patch_note`, `capture_connect_hook`, `draft_meeting_note`, `update_customer_file`, `create_customer_file`, + more | Gated writes with diffs and human confirmation |
+| **Composite** | `prepare_crm_prefetch`, `correlate_with_vault`, `promote_findings`, `check_vault_health`, `get_drift_report` | Cross-MCP workflows that bridge vault ↔ CRM ↔ M365 |
+
+**Setting up your own vault:**
+
+1. **Create a vault** — Open [Obsidian](https://obsidian.md/) and create a new vault (or point to an existing folder of Markdown files).
+
+2. **Add the folder structure OIL expects** — at minimum:
+   ```
+   YourVault/
+   ├── Customers/       # One .md per customer (e.g., Contoso.md)
+   ├── People/          # One .md per contact (e.g., Alice Smith.md)
+   ├── Meetings/        # Meeting notes with wikilinks to customers/people
+   └── oil.config.yaml  # Optional — customize folder paths and field names
+   ```
+   See [bench/fixtures/vault/](mcp/oil/bench/fixtures/vault/) for example files you can copy as templates.
+
+3. **Build and configure OIL:**
+   ```bash
+   cd mcp/oil && npm install && npm run build && cd ../..
+   ```
+
+4. **Enable in `.vscode/mcp.json`** — uncomment the `oil` block and set your vault path:
+   ```jsonc
+   "oil": {
+       "type": "stdio",
+       "command": "node",
+       "args": ["mcp/oil/dist/index.js"],
+       "env": {
+           "OBSIDIAN_VAULT_PATH": "/absolute/path/to/YourVault"
+       }
+   }
+   ```
+
+5. Click **Start** on `oil` in VS Code — the agent now has persistent memory.
+
+> **Don't use Obsidian?** Everything works without it. You can also bring any MCP-compatible note server — just wire it into `.vscode/mcp.json`.
+
+See the full [OIL README](mcp/oil/README.md) for configuration options, tool details, and architecture.
+
+</details>
 
 ---
 
@@ -319,12 +466,14 @@ Staged operations expire automatically after 10 minutes if not acted on.
 
 ## How It Works (Under the Hood)
 
+![alt text](docs/assets/how-it-works.png)
+
 ```
 You (Copilot Chat)
   │
-  ├── asks about CRM data ──→ msx-crm MCP server ──→ MSX Dynamics 365
+  ├── asks about CRM data  ──→ msx-crm MCP server ──→ MSX Dynamics 365
   ├── asks about M365 data ──→ workiq MCP server  ──→ Teams / Outlook / SharePoint
-  └── asks about notes     ──→ OIL (optional)          ──→ Your Obsidian Vault
+  └── asks about notes     ──→ OIL (optional)     ──→ Your Obsidian Vault
 ```
 
 1. You type a question or action in Copilot chat.
@@ -374,7 +523,7 @@ GitHub Copilot looks for special files in your repo's `.github/` folder and load
 |---|---|
 | `.github/copilot-instructions.md` | **Always loaded.** The "system prompt" — top-level rules Copilot follows on every turn. |
 | `.github/instructions/*.instructions.md` | **Loaded when relevant.** Each file has a `description` in its YAML frontmatter. Copilot loads it when your request matches those keywords. |
-| `.github/skills/*_SKILL.md` | **Loaded on demand.** Deep role/domain playbooks. Copilot picks the right one based on `name` and `description` in frontmatter. |
+| `.github/skills/*/SKILL.md` | **Loaded on demand.** Deep role/domain playbooks. Copilot picks the right one based on `name` and `description` in frontmatter. |
 | `.github/prompts/*.prompt.md` | **Reusable prompt templates.** Appear in Copilot's slash-command menu (`/`) so you can trigger complex workflows with one click. |
 
 You don't need to register these files anywhere — just create or edit them and Copilot picks them up automatically.
@@ -400,14 +549,14 @@ Here's what ships out of the box and what each piece does:
 │   ├── connect-hooks.instructions.md         ← Evidence capture for Connect impact reporting
 │   └── obsidian-vault.instructions.md        ← Vault integration conventions
 ├── skills/                          ← 27 atomic domain skills (loaded on demand)
-│   ├── pipeline-qualification-SKILL.md       ← Qualify new opportunities (Stages 1-2)
-│   ├── milestone-health-review-SKILL.md      ← Committed milestone health (Stages 4-5)
-│   ├── proof-plan-orchestration-SKILL.md     ← Technical proof management
-│   ├── risk-surfacing-SKILL.md               ← Proactive risk identification
-│   ├── handoff-readiness-validation-SKILL.md ← Cross-role handoff quality
-│   ├── mcem-stage-identification-SKILL.md    ← Identify current MCEM stage
-│   ├── workiq-query-scoping-SKILL.md         ← Scope M365 searches effectively
-│   ├── skill-authoring-best-practices-SKILL.md ← Guide for writing your own skills
+│   ├── pipeline-qualification/SKILL.md       ← Qualify new opportunities (Stages 1-2)
+│   ├── milestone-health-review/SKILL.md      ← Committed milestone health (Stages 4-5)
+│   ├── proof-plan-orchestration/SKILL.md     ← Technical proof management
+│   ├── risk-surfacing/SKILL.md               ← Proactive risk identification
+│   ├── handoff-readiness-validation/SKILL.md ← Cross-role handoff quality
+│   ├── mcem-stage-identification/SKILL.md    ← Identify current MCEM stage
+│   ├── workiq-query-scoping/SKILL.md         ← Scope M365 searches effectively
+│   ├── skill-authoring-best-practices/SKILL.md ← Guide for writing your own skills
 │   ├── ... (19 more atomic skills)           ← See directory for full list
 │   └── _legacy/                              ← Archived monolithic role skills (reference only)
 ├── prompts/
@@ -480,7 +629,7 @@ description: "Specialist (STU) role identity card. Mission, MCEM stage accountab
 ---
 ```
 
-**Tip:** You can duplicate a skill and create a variation for a sub-team (e.g., a `milestone-health-review-fasttrack-SKILL.md` with FastTrack-specific patterns).
+**Tip:** You can duplicate a skill and create a variation for a sub-team (e.g., a `milestone-health-review-fasttrack/SKILL.md` with FastTrack-specific patterns).
 
 #### 4. Create reusable prompt templates
 
@@ -550,7 +699,7 @@ Understanding the loading tiers helps you decide where to put new content:
 |---|---|---|---|
 | **Tier 0** | `copilot-instructions.md` | Every single turn | Global rules, routing, response style (~80 lines max) |
 | **Tier 1** | `instructions/*.instructions.md` | When request matches `description` keywords | Operational contracts, workflow gates, schemas |
-| **Tier 2** | `skills/*_SKILL.md` | When request matches `name`/`description` | Deep role playbooks, domain expertise |
+| **Tier 2** | `skills/*/SKILL.md` | When request matches `name`/`description` | Deep role playbooks, domain expertise |
 | **Tier 3** | `documents/` | Only when explicitly read via tool call | Large reference material, specs, protocol docs |
 
 **Rule of thumb:** Put universals in Tier 0, conditionals in Tier 1, role-specific depth in Tier 2, and bulky references in Tier 3.
@@ -569,10 +718,10 @@ No write operation happens without your explicit approval. Every create, update,
 Everything works fine without it. Obsidian integration is entirely optional.
 
 **Can I use this outside VS Code?**
-The MCP servers can work with any MCP-compatible client, but VS Code with GitHub Copilot is the recommended and best-supported experience.
+Yes — [GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a fully supported alternative that runs the same MCP tools, agents, and skills directly in your terminal. Install with `brew install copilot-cli` and run from the repo root. See [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli) for details. The MCP servers also work with any other MCP-compatible client.
 
 **How do I write a good skill or instruction file?**
-See [skill-authoring-best-practices-SKILL.md](.github/skills/skill-authoring-best-practices-SKILL.md) for a full checklist. The short version: keep the `description` keyword-rich so Copilot finds it, structure the body as a step-by-step workflow, and don't exceed ~150 lines per file.
+See [skill-authoring-best-practices/SKILL.md](.github/skills/skill-authoring-best-practices/SKILL.md) for a full checklist. The short version: keep the `description` keyword-rich so Copilot finds it, structure the body as a step-by-step workflow, and don't exceed ~150 lines per file.
 
 **I edited a file in `.github/` but Copilot doesn't seem to use it.**
 Check the `description` field in the YAML frontmatter — Copilot matches against those keywords. If the description doesn't overlap with how you phrase your request, it won't load. Try adding more trigger phrases to the description.

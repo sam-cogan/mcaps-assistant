@@ -21,13 +21,16 @@ const SKILLS_DIR = join(__dirname, '..', 'skills');
 
 const args = process.argv.slice(2);
 let WARN_THRESHOLD = 0.55;
+let ciMode = false;
+const MAX_CONFUSION_PAIRS = parseInt(process.env.MAX_CONFUSION_PAIRS || '5', 10);
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--warn' && args[i + 1]) WARN_THRESHOLD = parseFloat(args[i + 1]);
   if (args[i].startsWith('--warn=')) WARN_THRESHOLD = parseFloat(args[i].split('=')[1]);
+  if (args[i] === '--ci') ciMode = true;
 }
 
 function shortName(file) {
-  return file.replace(/[-_]SKILL\.md$/, '');
+  return file.replace(/\/SKILL\.md$/, '').replace(/[-_]SKILL\.md$/, '');
 }
 
 const heatChar = sim => {
@@ -142,9 +145,19 @@ async function main() {
   }
 
   console.log();
+
+  return warnings.length;
 }
 
-main().catch(err => {
+main().then(warningCount => {
+  if (!ciMode) process.exit(0);
+  if (warningCount > MAX_CONFUSION_PAIRS) {
+    console.error(`  ✗ CI FAILED: ${warningCount} confusion pairs exceed limit of ${MAX_CONFUSION_PAIRS}`);
+    process.exit(1);
+  }
+  console.log(`  ✓ CI PASSED: ${warningCount} confusion pairs within limit of ${MAX_CONFUSION_PAIRS}`);
+  process.exit(0);
+}).catch(err => {
   console.error('Error:', err.message);
   process.exit(1);
 });

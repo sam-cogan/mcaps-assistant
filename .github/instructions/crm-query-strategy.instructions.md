@@ -1,5 +1,6 @@
 ---
 description: "CRM read query scoping strategy for MSX/MCEM. Scope-Before-Retrieve pattern: VAULT-PREFETCH, composite tools, crm_query filters, get_milestones usage. Use when constructing CRM queries, milestone lookups, or opportunity scoping to avoid oversized payloads. Prevents unscoped get_milestones(mine:true) calls."
+applyTo: "mcp/msx/**"
 ---
 
 # CRM Query Strategy (Scope-Before-Retrieve)

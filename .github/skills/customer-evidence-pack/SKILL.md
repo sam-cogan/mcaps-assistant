@@ -1,7 +1,7 @@
 ---
 name: customer-evidence-pack
-description: 'Assembles customer-facing evidence from CRM and M365 sources for CSAM at MCEM Stages 4-5. Produces consolidated evidence for risk updates, adoption reviews, value realization reports, and governance meetings. Use when CSAM needs customer communication evidence, governance preparation, risk documentation, or asks about customer evidence, communication history, or meeting preparation. Triggers: customer evidence, evidence pack, governance prep, customer communication, risk evidence, value evidence.'
-argument-hint: 'Provide opportunityId, customer/stakeholder names, and date range for evidence gathering'
+description: 'Customer evidence pack compiler: assembles email threads, calendar excerpts, and chat history into a consolidated briefing document for upcoming reviews. Chains with mcem-stage-identification and milestone-health-review for pre-governance prep. Triggers: meeting prep, compile package, email threads, chat history, briefing document, review preparation, communication bundle, evidence pack, governance prep.'
+argument-hint: 'Provide opportunityId, participant names, and date range for artifact compilation'
 ---
 
 ## Purpose

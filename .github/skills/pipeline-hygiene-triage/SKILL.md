@@ -1,7 +1,7 @@
 ---
 name: pipeline-hygiene-triage
-description: 'Triages pipeline exceptions for Specialist at MCEM Stages 2-3 by detecting stage staleness, date drift, missing required fields, and low-quality opportunities. Generates prioritized exception list and dry-run corrections. Use when Specialist runs weekly pipeline review, pre-forecast hygiene check, or asks about pipeline health, stale opportunities, or field completeness. Triggers: pipeline hygiene, stage staleness, pipeline review, forecast prep, field completeness.'
-argument-hint: 'Provide opportunityId(s) or run across all active Specialist opportunities'
+description: 'Pipeline hygiene triage for Specialist: flags stale opportunities, missing CRM fields, close-date slippage, and low-quality entries. Generates exception report with bulk-fix suggestions for forecast prep. Chains with handoff-readiness-validation and risk-surfacing for weekly pipeline review. Triggers: portfolio cleanup, stale opportunities, missing fields, forecast prep, pipeline exceptions, close-date slip, weekly review, pipeline review.'
+argument-hint: 'Scope by opportunityId(s) or sweep all active Specialist-owned pipeline'
 ---
 
 ## Purpose
@@ -50,3 +50,4 @@ Detects and prioritizes pipeline hygiene exceptions across active Stage 2–3 op
 - `proposed_field_updates`: dry-run payloads for corrections
 - `escalation_path`: who to engage (SE, CSA, CSAM, partner) per exception
 - `next_action`: "Pipeline reviewed. CSA/CSAM should run `commit-gate-enforcement` for milestones approaching commitment — recommend engaging the CSU team."
+- `connect_hook_hint`: Circle(s): Customer/Business, Team/Org — "Pipeline hygiene triage across {n} opportunities: flagged {exceptions} exceptions, proposed {fixes} field corrections for forecast accuracy"

@@ -1,7 +1,7 @@
 ---
 name: task-hygiene-flow
-description: 'Daily/weekly milestone task hygiene for Solution Engineer at any MCEM stage. Verifies task owner, due date, status, blocker text, and completion condition on active milestones. Generates dry-run task corrections. Use when SE runs daily task review, asks about stale tasks, missing owners, task completeness, or milestone task hygiene. Triggers: task hygiene, daily tasks, stale tasks, task review, SE hygiene, milestone tasks.'
-argument-hint: 'Provide opportunityId(s) or run across all SE-owned active milestones'
+description: 'Task hygiene flow for SE: reads each CRM task row for correct owner, due date, status, and blocker notes. Patches stale or orphaned entries via dry-run at individual task-row level. Chains with execution-monitoring and unified-constraint-check for SE morning prep. Triggers: task record inspector, SE daily check, stale tasks, orphaned tasks, task owner, task due date, CRM task row, task hygiene, morning prep.'
+argument-hint: 'Scope by opportunityId(s) or sweep all SE-owned active task records'
 ---
 
 ## Purpose

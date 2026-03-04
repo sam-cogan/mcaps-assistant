@@ -1,7 +1,7 @@
 ---
 name: handoff-readiness-validation
-description: 'Validates STU-to-CSU handoff completeness when Specialist transitions committed milestones to CSAM/CSA at MCEM Stage 3. Checks owner assignment, outcome clarity, proof artifacts, and next actions. Use when Specialist is handing off, customer agreement is reached, or commitment flips to committed. Triggers: handoff readiness, STU to CSU, handoff check, transition validation, Stage 3 handoff.'
-argument-hint: 'Provide opportunityId for the handoff-candidate opportunity'
+description: 'Handoff readiness validation for STU-to-CSU transfer: verifies the Specialist populated business-case summary, measurable outcomes, proof artifacts, CSU-aligned owners, and next-action items before disengaging. Returns populated/missing per field. Chains with pipeline-hygiene-triage and risk-surfacing for weekly pipeline review; chains with architecture-feasibility-check and architecture-execution-handoff for post-proof handoff. Triggers: Specialist departure, STU leaves, transfer checklist, STU-to-CSU handoff, readiness validation, ready to hand off.'
+argument-hint: 'Provide opportunityId the Specialist is preparing to transfer'
 ---
 
 ## Purpose

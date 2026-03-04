@@ -1,7 +1,7 @@
 ---
 name: milestone-health-review
-description: 'Reviews committed milestone health for CSAM at MCEM Stages 4-5 by checking status, blockers, date drift, outcome clarity, and recovery plans. Generates customer and internal summaries with dry-run corrections. Use when CSAM runs weekly governance review, customer health check, or asks about milestone status, blocked milestones, or delivery risk. Triggers: milestone health, committed milestone review, governance review, delivery risk, blocked milestones.'
-argument-hint: 'Provide opportunityId(s) or run across all CSAM-owned committed milestones'
+description: 'Milestone health review for weekly governance: scans committed milestones for date drift, overdue completions, and stalled items. Produces customer-safe status bullets plus internal remediation queue. Chains with mcem-stage-identification and customer-evidence-pack for pre-governance prep. Triggers: weekly status, date drift, overdue milestones, governance cycle, customer status update, how are my milestones, milestone health, governance prep.'
+argument-hint: 'Scope by opportunityId(s) or run across all CSAM-governed committed work'
 ---
 
 ## Purpose
@@ -52,3 +52,4 @@ Produces a structured health report for committed milestones within CSAM scope, 
 - `internal_summary`: action items with owners and dates
 - `dry_run_updates`: update/task preview payloads
 - `next_action`: "Health review complete. Would you like to run `delivery-accountability-mapping` for blocked milestones?"
+- `connect_hook_hint`: Circle(s): Customer/Business, Team/Org — "Ran milestone health review for {customer}: {on_track} on-track, {at_risk} at-risk, {blocked} blocked — generated remediation queue with {n} action items"

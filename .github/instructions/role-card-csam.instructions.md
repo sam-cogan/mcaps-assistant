@@ -1,5 +1,6 @@
 ---
-description: "Customer Success Account Manager (CSAM) role identity card. Mission, MCEM stage accountability, ownership scope, hygiene cadence, boundary rules, cross-role skill lens, and escalation triggers. Loaded when user identifies as CSAM, or asks about delivery ownership, customer health reviews, commit readiness gates, success plan alignment, usage/adoption milestones, milestone health, or CSAM-vs-CSA authority boundaries."
+description: "CSAM role card — customer-success orchestrator. Covers governance cadence, success-plan alignment, adoption tracking, commit-readiness gates, and CSAM-vs-CSA boundaries. Load when user identifies as CSAM, or asks about customer health reviews, usage milestones, or weekly governance."
+applyTo: ".github/skills/**"
 ---
 
 # Role Card: CSAM

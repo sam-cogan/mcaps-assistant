@@ -1,7 +1,7 @@
 ---
 name: execution-authority-clarification
-description: 'Resolves overlapping CSAM and CSA authority signals on committed milestones at MCEM Stage 4. Detects conflicting technical vs orchestration guidance and recommends explicit owner-of-decision for each disputed area. Use when CSAM or CSA encounters authority confusion, conflicting direction, overlapping ownership, or tie-break needed on execution decisions. Triggers: authority clarification, CSA vs CSAM, tie-break, execution authority, ownership conflict, who decides.'
-argument-hint: 'Provide opportunityId and milestoneId(s) with authority confusion'
+description: 'Authority tie-breaker for contradictory guidance: when two roles give conflicting direction on the same work item, assigns a single decision-owner per disputed domain. Breaks deadlock so execution resumes. Triggers: tie-break, conflicting direction, who decides, authority clarification, role disagreement, deadlock, two roles disagree.'
+argument-hint: 'Provide opportunityId and milestoneId(s) under disputed direction'
 ---
 
 ## Purpose

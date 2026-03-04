@@ -1,5 +1,5 @@
 ---
-description: "Top-level intent definition for the agent system. Establishes the overarching purpose, multi-medium communication model, strategic alignment principles, and risk intelligence layer. Must be resolved BEFORE role mapping or tool selection. Use when reasoning about cross-role communication, account strategy, risk surfacing, relationship health, handoff quality, customer engagement, rooms of the house, or full-value orchestration across MSX, M365, and agent memory mediums."
+description: "Top-level intent: the agent strengthens human relationships across account teams. Defines multi-medium communication model, strategic alignment, and risk intelligence. Resolve BEFORE role or tool selection. Triggers: cross-role communication, account strategy, rooms of the house, full-value orchestration, relationship health."
 ---
 
 # Intent: Strengthen Human Relationships Across the Account Team

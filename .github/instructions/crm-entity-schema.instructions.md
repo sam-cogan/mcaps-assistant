@@ -77,6 +77,14 @@ Incorrect entity set names or field names will return 404 or 400 errors.
 | title | String | Job title |
 | businessunitid | Lookup | Business unit |
 
+### msp_dealteams (logical name: msp_dealteam)
+| Property | Type | Description |
+|---|---|---|
+| msp_dealteamid | Uniqueidentifier | Primary key |
+| _msp_dealteamuserid_value | Lookup | Deal team member (system user) |
+| _msp_parentopportunityid_value | Lookup | Parent opportunity |
+| statecode | State | Record state (0 = Active) |
+
 ## Known Invalid Entity Sets (DO NOT USE)
 
 | Attempted | Error | Correct |
@@ -180,30 +188,39 @@ The `get_milestones` tool only accepts these parameters (defined in `mcp-server/
 
 MSX has **two distinct deal team concepts** that are often conflated. The agent must distinguish them clearly.
 
-### Opportunity Deal Team (NOT reliably retrievable)
+### Opportunity Deal Team (queryable via `msp_dealteams`)
 The formal deal team lives at the **opportunity level**. Being on the opportunity deal team grants visibility and accountability for the entire opportunity. This is the deal team users typically mean when they say "deal team."
 
-**Current limitation:** We do NOT have a reliable MCP tool or OData query pattern to fetch the opportunity deal team roster. The underlying entity/relationship for opportunity deal team members is not exposed through the standard OData entity sets available to us.
+The `msp_dealteams` entity exposes deal-team membership via OData. Key fields:
+- `_msp_dealteamuserid_value` — the team member (system user lookup)
+- `_msp_parentopportunityid_value` — the parent opportunity
+- `statecode` — filter on `0` for active records
 
-When a user asks "who is on the deal team?" or "am I on the deal team?" for an opportunity:
-- Acknowledge that **opportunity-level deal team membership cannot be reliably retrieved** via current tooling.
-- Suggest the user check the deal team directly in the MSX UI (Opportunity → Deal Team tab).
-- Offer to show **milestone ownership** as a partial proxy (see below).
+Example query — find all opportunities where a user is on the deal team:
+```
+crm_query({
+  entitySet: "msp_dealteams",
+  filter: "_msp_dealteamuserid_value eq '<USER_GUID>' and statecode eq 0",
+  select: "_msp_parentopportunityid_value"
+})
+```
+
+**Note:** The `msp_dealteams` entity may not be available in all environments. When unavailable, fall back to milestone ownership (see below).
 
 ### Milestone Deal Team (retrievable via `_ownerid_value`)
 Each engagement milestone has an **owner** (`_ownerid_value` on `msp_engagementmilestones`). Owning a milestone means you are part of the milestone-level execution team.
 
 **Key distinction:** Being assigned as a milestone owner does **NOT** automatically add you to the opportunity deal team. These are separate relationships in MSX.
 
-The `get_my_active_opportunities` tool uses milestone ownership as a **heuristic** to infer deal team membership — it finds opportunities where the user owns milestones and tags them as `relationship: 'deal-team'`. This is useful but not equivalent to the real opportunity deal team.
+The `get_my_active_opportunities` tool uses `msp_dealteams` as its primary lookup and falls back to milestone ownership as a heuristic when `msp_dealteams` is unavailable.
 
 ### What we CAN do
 | Question | Tool / Approach | Reliability |
 |---|---|---|
+| Who is on the opportunity deal team? | `crm_query` on `msp_dealteams` | Reliable (where entity is available) |
+| Am I on the opportunity deal team? | `crm_query` on `msp_dealteams` filtered by user | Reliable (where entity is available) |
 | Who owns milestones on this opportunity? | `get_milestones({ opportunityId })` → `_ownerid_value` | Reliable |
-| Which opportunities am I involved in? | `get_my_active_opportunities()` | Reliable (owner + milestone heuristic) |
-| Who is on the opportunity deal team? | ❌ Not available via MCP | Cannot retrieve |
-| Am I on the opportunity deal team? | ❌ Not available via MCP | Cannot retrieve |
+| Which opportunities am I involved in? | `get_my_active_opportunities()` | Reliable (deal team + milestone heuristic fallback) |
 
 ## Dynamic Schema Discovery
 When a property is not listed above, use the `crm_list_entity_properties` MCP tool:

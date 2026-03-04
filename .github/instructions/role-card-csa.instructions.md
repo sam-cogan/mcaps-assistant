@@ -1,5 +1,6 @@
 ---
-description: "Cloud Solution Architect (CSA) role identity card. Mission, MCEM stage accountability, ownership scope, hygiene cadence, boundary rules, cross-role skill lens, and escalation triggers. Loaded when user identifies as CSA or Cloud Solution Architect, or asks about execution readiness, committed milestone health, value realization, architecture handoff, CSA-vs-CSAM authority, or delivery ownership disambiguation."
+description: "CSA role card — architecture-focused execution owner. Covers technical proof oversight, guardrail enforcement, value-realization validation, and CSA-vs-CSAM authority boundaries. Load when user identifies as CSA or Cloud Solution Architect, or asks about architecture handoff or delivery ownership."
+applyTo: ".github/skills/**"
 ---
 
 # Role Card: Cloud Solution Architect (CSA)

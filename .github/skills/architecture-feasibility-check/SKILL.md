@@ -1,7 +1,7 @@
 ---
 name: architecture-feasibility-check
-description: 'Validates architecture and delivery feasibility for CSA at MCEM Stages 2-3. Checks environment prerequisites, dependency sequencing, capacity constraints, and technical risk before solution commitment. Use when CSA evaluates executability, delivery dependencies, technical risk, or architecture readiness. Triggers: architecture feasibility, delivery dependencies, technical risk, executability check, environment readiness, capacity validation, Stage 2 feasibility.'
-argument-hint: 'Provide opportunityId for the opportunity requiring feasibility assessment'
+description: 'Architecture feasibility check before commitment: can we actually build this? Reviews environment prerequisites, dependency sequencing, capacity headroom, and solution design risks. Chains with architecture-execution-handoff and handoff-readiness-validation for post-proof handoff. Triggers: can we build, feasibility, prerequisites, capacity headroom, technical risk, solution design review, buildability, proof completed.'
+argument-hint: 'Provide opportunityId for the solution requiring technical feasibility review'
 ---
 
 ## Purpose

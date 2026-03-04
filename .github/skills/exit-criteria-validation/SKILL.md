@@ -1,7 +1,7 @@
 ---
 name: exit-criteria-validation
-description: 'Validates opportunity progress against formal MCEM exit criteria for the current stage using Verifiable Outcomes from CRM entity state. Available at any MCEM stage. Use when any role checks stage readiness, validates exit criteria, prepares for stage transition, or asks about stage progression readiness. Triggers: exit criteria, stage readiness, stage gate, stage transition, ready to advance, progression check.'
-argument-hint: 'Provide opportunityId and current or target MCEM stage'
+description: 'Exit-criteria validation via VO evidence audit: checks each formal criterion against CRM field evidence (solution play set, BVA complete, success plan linked) and returns pass/fail per item. Flags when BPF position diverges from actual evidence. Chains with mcem-stage-identification, risk-surfacing, and role-orchestration for full deal triage. Triggers: exit criteria, are we ready, Verifiable Outcome check, criteria met, VO audit, BPF evidence mismatch, ready to advance.'
+argument-hint: 'Provide opportunityId and the target stage number to validate against'
 ---
 
 ## Purpose

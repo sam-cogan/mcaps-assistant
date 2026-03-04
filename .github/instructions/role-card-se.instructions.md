@@ -1,5 +1,6 @@
 ---
-description: "Solution Engineer (SE) role identity card. Mission, MCEM stage accountability, ownership scope, hygiene cadence, boundary rules, cross-role skill lens, and escalation triggers. Loaded when user identifies as Solution Engineer or SE, or asks about technical proof management, milestone task hygiene, BANT readiness, SE-to-CSU handoff, or SE daily workflows."
+description: "SE role card — technical proof executor. Covers POC/Pilot/Demo management, CRM task-record hygiene, BANT qualification support, and SE-to-CSU handoff. Load when user identifies as Solution Engineer or SE, or asks about proof management or task hygiene."
+applyTo: ".github/skills/**"
 ---
 
 # Role Card: Solution Engineer (SE)
