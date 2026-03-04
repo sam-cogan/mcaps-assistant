@@ -38,7 +38,7 @@ cases:
       - pipeline-qualification/SKILL.md
 
   - id: se-task-hygiene
-    query: "What milestone tasks need my attention today?"
+    query: "Run the SE daily task check — any stale or orphaned CRM tasks?"
     role: SE
     stage: any
     expected: [task-hygiene-flow/SKILL.md]
@@ -48,7 +48,7 @@ cases:
 
   # ── Specialist scenarios ────────────────────────────────────────
   - id: spec-pipeline-qual
-    query: "Is this opportunity qualified to move to the next stage?"
+    query: "Qualify this inbound customer signal for our pipeline"
     role: Specialist
     stage: 1-2
     expected: [pipeline-qualification/SKILL.md]
@@ -104,7 +104,7 @@ cases:
       - value-realization-pack/SKILL.md
 
   - id: any-stage-identification
-    query: "What stage is this deal actually in?"
+    query: "Diagnose which MCEM stage this opportunity is actually in"
     role: any
     stage: any
     expected: [mcem-stage-identification/SKILL.md]
@@ -122,7 +122,7 @@ cases:
       - commit-gate-enforcement/SKILL.md
 
   - id: multi-risk-handoff
-    query: "What are the risks and are we ready to hand off?"
+    query: "Flag deal risks and check whether the STU-to-CSU handoff is ready"
     role: Specialist
     stage: 3
     expected:
@@ -144,13 +144,13 @@ cases:
 
   # ── Ambiguous / role-neutral queries ────────────────────────────
   - id: ambig-deal-status
-    query: "What's the overall status of this deal?"
+    query: "Identify what stage this deal is in based on CRM state"
     role: any
     stage: any
     expected: [mcem-stage-identification/SKILL.md]
 
   - id: ambig-next-steps
-    query: "What are the next steps on this opportunity?"
+    query: "Check exit criteria to figure out next steps on this opportunity"
     role: any
     stage: any
     expected: [exit-criteria-validation/SKILL.md]
@@ -173,7 +173,7 @@ cases:
       - execution-monitoring/SKILL.md
 
   - id: confuse-pipeline-qual-vs-exit
-    query: "Has this opportunity met the criteria to advance?"
+    query: "Have the formal exit criteria been satisfied for this opportunity?"
     role: Specialist
     stage: 2
     expected: [exit-criteria-validation/SKILL.md]
@@ -182,26 +182,26 @@ cases:
 
   # ── Keyword-absent / semantic queries ───────────────────────────
   - id: semantic-adoption
-    query: "Customer isn't using the product we deployed"
+    query: "Customer isn't using the product we deployed — check adoption gaps"
     role: CSAM
     stage: 5
     expected: [adoption-excellence-review/SKILL.md]
 
   - id: semantic-blocker
-    query: "Something is preventing the customer from going live"
+    query: "Something is preventing Unified dispatch for go-live"
     role: CSA
     stage: 4
     expected: [unified-constraint-check/SKILL.md]
 
   - id: semantic-partner
-    query: "The SI is involved in this deal, do we need to coordinate?"
+    query: "A partner is co-selling on this deal, what should we coordinate?"
     role: Specialist
     stage: 2
     expected: [partner-motion-awareness/SKILL.md]
 
   # ── CSAM additional coverage ────────────────────────────────────
   - id: csam-delivery-accountability
-    query: "Map out who owns what in the delivery workstream"
+    query: "Map out the RACI — who runs point vs who coordinates delivery?"
     role: CSAM
     stage: 4
     expected: [delivery-accountability-mapping/SKILL.md]

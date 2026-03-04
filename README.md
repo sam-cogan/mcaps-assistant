@@ -21,7 +21,7 @@ MCAPS Copilot Tools connects GitHub Copilot (in VS Code) to your MSX CRM and Mic
 > **Prerequisites:**
 > - **Connected to the Microsoft corporate VPN** (required to reach internal CRM endpoints)
 > - A **Microsoft corp account** (used for `az login` authentication)
-> - A GitHub Copilot-compatible IDE such as [VS Code](https://code.visualstudio.com/) (or [VS Code Insiders](https://code.visualstudio.com/insiders/)) with the [GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat), **or** the [GitHub Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli/installing-github-copilot-in-the-cli)
+> - A GitHub Copilot-compatible IDE such as [VS Code](https://code.visualstudio.com/) (or [VS Code Insiders](https://code.visualstudio.com/insiders/)) with the [GitHub Copilot extension](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat), **or** [GitHub Copilot CLI](https://github.com/features/copilot/cli/) (`brew install copilot-cli`)
 > - [Node.js 18+](https://nodejs.org/)
 > - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
 
@@ -50,12 +50,20 @@ az login
 
 > **Important:** You must be on the corporate VPN and use a Microsoft account (e.g., `your-alias@microsoft.com`). Personal or third-party accounts will not have access to MSX CRM.
 
-### Step 3: Open the repo in VS Code
+### Step 3: Open the repo in VS Code — or Copilot CLI
 
+**Option A: VS Code**
 ```bash
 # from the repo root
 code .
 ```
+
+**Option B: [GitHub Copilot CLI](https://github.com/features/copilot/cli/)**
+```bash
+# from the repo root — starts a terminal-native agentic session
+copilot
+```
+Copilot CLI automatically detects `.vscode/mcp.json`, `AGENTS.md`, and `.github/skills/` in the repo. If using the CLI, skip Steps 4–5 — the MCP servers start on demand and you can begin prompting immediately. See [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli) for install and usage details.
 
 ### Step 4: Start the MCP servers
 
@@ -66,6 +74,76 @@ code .
 ### Step 5: Open Copilot and start chatting
 
 Open the GitHub Copilot chat panel (`Ctrl+Shift+I` / `Cmd+Shift+I`) and try one of the example prompts below.
+
+---
+
+## Alternative: Use with GitHub Copilot CLI
+
+[GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a terminal-native agentic coding agent that supports MCP servers, custom agents, and skills — the same ones in this repo. You can run the full MCAPS toolkit from your shell without opening VS Code.
+
+### Install Copilot CLI
+
+```bash
+# macOS
+brew install copilot-cli
+
+# or via npm
+npm install -g @github/copilot
+```
+
+> Included in Copilot Free, Pro, Pro+, Business, and Enterprise subscriptions. See the [documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli) for setup details.
+
+### Prerequisites
+
+- Azure CLI signed in (same as the VS Code flow — **VPN required**):
+  ```bash
+  az login
+  ```
+- Dependencies installed (`mcp/msx/` and optionally `mcp/oil/`)
+
+### How it works with this repo
+
+Copilot CLI automatically picks up the project's configuration when you run it from the repo root:
+
+- **MCP servers** — reads `.vscode/mcp.json` and connects to the same `msx-crm`, `workiq`, and `oil` servers.
+- **AGENTS.md** — loads the agent instructions from the repo root.
+- **Skills & instructions** — loads `.github/skills/` and `.github/instructions/` the same way VS Code does, matching by keyword.
+
+### Run it
+
+```bash
+cd mcaps-copilot-tools
+
+# Start Copilot CLI — it will detect the MCP servers and agent config
+copilot
+
+# Then use slash commands inside the session:
+#   /plan    — outline work before executing
+#   /model   — switch between models
+#   /fleet   — parallelize across subagents
+#   /agent   — select a custom agent
+#   /skills  — browse available skills
+#   /resume  — pick up a previous session
+```
+
+### Example prompts (same as VS Code)
+
+Once inside a Copilot CLI session, use the same natural language prompts:
+
+```
+Who am I in MSX?
+Show me my active opportunities.
+Run my weekly pipeline review — what needs cleanup across my Stage 2 and 3 opps?
+How are my committed milestones doing?
+```
+
+Write operations still use the Stage → Review → Execute pattern and require your explicit approval.
+
+### CLI ↔ IDE handoff
+
+Copilot CLI supports seamless handoff to VS Code. Start with `/plan` in the terminal, then use the CLI-to-IDE flow to continue refining in your editor — or go the other direction.
+
+> **Tip:** If you primarily work in the terminal, Copilot CLI gives you the same MCP tools, role-aware skills, and safety guardrails as the VS Code experience — just in your shell.
 
 ---
 
@@ -640,7 +718,7 @@ No write operation happens without your explicit approval. Every create, update,
 Everything works fine without it. Obsidian integration is entirely optional.
 
 **Can I use this outside VS Code?**
-The MCP servers can work with any MCP-compatible client, but VS Code with GitHub Copilot is the recommended and best-supported experience.
+Yes — [GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a fully supported alternative that runs the same MCP tools, agents, and skills directly in your terminal. Install with `brew install copilot-cli` and run from the repo root. See [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli) for details. The MCP servers also work with any other MCP-compatible client.
 
 **How do I write a good skill or instruction file?**
 See [skill-authoring-best-practices/SKILL.md](.github/skills/skill-authoring-best-practices/SKILL.md) for a full checklist. The short version: keep the `description` keyword-rich so Copilot finds it, structure the body as a step-by-step workflow, and don't exceed ~150 lines per file.

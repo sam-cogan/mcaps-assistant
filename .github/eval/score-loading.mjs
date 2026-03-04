@@ -301,8 +301,8 @@ async function main() {
     const qEmb = await embedText(tc.query);
     const ranked = rank(qEmb, allItems, itemEmbs);
 
-    // Resolve expected list — support both old format and new unified format
-    const expected = tc.expected_unified || tc.expected?.branch || [];
+    // Resolve expected list
+    const expected = Array.isArray(tc.expected) ? tc.expected : [];
 
     results.push({ tc, ranked, expected, allItems });
     printCase(tc, ranked, allItems, expected);
