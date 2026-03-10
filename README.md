@@ -20,13 +20,17 @@ MCAPS Copilot Tools connects GitHub Copilot (in VS Code) to your MSX CRM and Mic
 
 - [Quick Start (5 Minutes)](#quick-start-5-minutes)
 - [Guided Flows (Slash Commands)](#guided-flows-slash-commands)
-- [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli)
 - [Try It — Scenario Prompts](#try-it--scenario-prompts)
+  - [Getting oriented](#getting-oriented)
+  - [By role](#by-role) — Specialist, SE, CSA, CSAM
+  - [Multi-skill chain prompts](#multi-skill-chain-prompts-the-good-stuff)
+- [Alternative: Use with GitHub Copilot CLI](#alternative-use-with-github-copilot-cli)
 - [Optional: Enable Obsidian Vault Integration](#optional-enable-obsidian-vault-integration)
-- [Project Layout](#project-layout)
-- [What&#39;s Included](#whats-included)
-- [Write Operations &amp; Responsible AI Use](#write-operations--responsible-ai-use)
+- [Optional: Power BI Analytics](#optional-power-bi-analytics)
+- [What's Included](#whats-included)
 - [How It Works (Under the Hood)](#how-it-works-under-the-hood)
+- [Write Operations & Responsible AI Use](#write-operations--responsible-ai-use)
+- [Project Layout](#project-layout)
 - [Configuration](#configuration)
 - [Customization — Make It Yours](#customization--make-it-yours)
 - [Frequently Asked Questions](#frequently-asked-questions)
@@ -105,6 +109,16 @@ Or just type: `Who am I in MSX?`
 
 > **Something not working?** Run the environment check from the Command Palette: `Cmd+Shift+P` → `Tasks: Run Task` → `Setup: Check Environment`. It will tell you exactly what's missing.
 
+> **Try these first** — copy-paste into the Copilot chat window:
+>
+> | Prompt | What happens |
+> |--------|-------------|
+> | `Who am I in MSX?` | Identifies your CRM role and account team |
+> | `Show me my active opportunities.` | Lists your pipeline with stage and health |
+> | `It's Monday — run my weekly pipeline review.` | Hygiene sweep + prioritized action list |
+>
+> [See all scenario prompts →](#try-it--scenario-prompts) · [Slash commands →](#guided-flows-slash-commands)
+
 ---
 
 ## Guided Flows (Slash Commands)
@@ -130,75 +144,6 @@ Ad hoc:      /what-next        →  follow the suggestions
 ```
 
 > **Tip:** You can also skip the slash commands entirely and just describe what you need in plain English. The slash commands are shortcuts, not requirements.
-
----
-
-## Alternative: Use with GitHub Copilot CLI
-
-[GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a terminal-native agentic coding agent that supports MCP servers, custom agents, and skills — the same ones in this repo. You can run the full MCAPS toolkit from your shell without opening VS Code.
-
-### Install Copilot CLI
-
-```bash
-# macOS
-brew install copilot-cli
-
-# or via npm
-npm install -g @github/copilot
-```
-
-> Included in Copilot Free, Pro, Pro+, Business, and Enterprise subscriptions. See the [documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli) for setup details.
-
-### Prerequisites
-
-- Azure CLI signed in (same as the VS Code flow — **VPN required**):
-  ```bash
-  az login
-  ```
-- Dependencies installed (`mcp/msx/` and optionally `mcp/oil/`)
-
-### How it works with this repo
-
-Copilot CLI automatically picks up the project's configuration when you run it from the repo root:
-
-- **MCP servers** — reads `.vscode/mcp.json` and connects to the same `msx-crm`, `workiq`, and `oil` servers.
-- **AGENTS.md** — loads the agent instructions from the repo root.
-- **Skills & instructions** — loads `.github/skills/` and `.github/instructions/` the same way VS Code does, matching by keyword.
-
-### Run it
-
-```bash
-cd mcaps-iq
-# Start Copilot CLI — it will detect the MCP servers and agent config
-copilot
-
-# Then use slash commands inside the session:
-#   /plan    — outline work before executing
-#   /model   — switch between models
-#   /fleet   — parallelize across subagents
-#   /agent   — select a custom agent
-#   /skills  — browse available skills
-#   /resume  — pick up a previous session
-```
-
-### Example prompts (same as VS Code)
-
-Once inside a Copilot CLI session, use the same natural language prompts:
-
-```
-Who am I in MSX?
-Show me my active opportunities.
-Run my weekly pipeline review — what needs cleanup across my Stage 2 and 3 opps?
-How are my committed milestones doing?
-```
-
-Write operations still use the Stage → Review → Execute pattern and require your explicit approval.
-
-### CLI ↔ IDE handoff
-
-Copilot CLI supports seamless handoff to VS Code. Start with `/plan` in the terminal, then use the CLI-to-IDE flow to continue refining in your editor — or go the other direction.
-
-> **Tip:** If you primarily work in the terminal, Copilot CLI gives you the same MCP tools, role-aware skills, and safety guardrails as the VS Code experience — just in your shell.
 
 ---
 
@@ -308,11 +253,86 @@ These are realistic "day in the life" prompts that chain **multiple skills** in 
 >
 > *Chains: adoption-excellence-review → value-realization-pack → expansion-signal-routing*
 
+> **Power BI portfolio review**
+>
+> `Run my Azure portfolio review — what's my gap to target and which opportunities should I focus on?`
+>
+> *Uses: pbi-azure-portfolio-review prompt (Power BI + CRM cross-medium)*
+
 > **Morning standup prep (SE)**
 >
 > `I'm an SE. Check my task hygiene, show me any execution blockers on committed milestones, and tell me if there are Unified constraints I should flag today.`
 >
 > *Chains: task-hygiene-flow → execution-monitoring → unified-constraint-check*
+
+---
+
+## Alternative: Use with GitHub Copilot CLI
+
+[GitHub Copilot CLI](https://github.com/features/copilot/cli/) is a terminal-native agentic coding agent that supports MCP servers, custom agents, and skills — the same ones in this repo. You can run the full MCAPS toolkit from your shell without opening VS Code.
+
+### Install Copilot CLI
+
+```bash
+# macOS
+brew install copilot-cli
+
+# or via npm
+npm install -g @github/copilot
+```
+
+> Included in Copilot Free, Pro, Pro+, Business, and Enterprise subscriptions. See the [documentation](https://docs.github.com/copilot/concepts/agents/about-copilot-cli) for setup details.
+
+### Prerequisites
+
+- Azure CLI signed in (same as the VS Code flow — **VPN required**):
+  ```bash
+  az login
+  ```
+- Dependencies installed (`mcp/msx/` and optionally `mcp/oil/`)
+
+### How it works with this repo
+
+Copilot CLI automatically picks up the project's configuration when you run it from the repo root:
+
+- **MCP servers** — reads `.vscode/mcp.json` and connects to the same `msx-crm`, `workiq`, and `oil` servers.
+- **AGENTS.md** — loads the agent instructions from the repo root.
+- **Skills & instructions** — loads `.github/skills/` and `.github/instructions/` the same way VS Code does, matching by keyword.
+
+### Run it
+
+```bash
+cd mcaps-iq
+# Start Copilot CLI — it will detect the MCP servers and agent config
+copilot
+
+# Then use slash commands inside the session:
+#   /plan    — outline work before executing
+#   /model   — switch between models
+#   /fleet   — parallelize across subagents
+#   /agent   — select a custom agent
+#   /skills  — browse available skills
+#   /resume  — pick up a previous session
+```
+
+### Example prompts (same as VS Code)
+
+Once inside a Copilot CLI session, use the same natural language prompts:
+
+```
+Who am I in MSX?
+Show me my active opportunities.
+Run my weekly pipeline review — what needs cleanup across my Stage 2 and 3 opps?
+How are my committed milestones doing?
+```
+
+Write operations still use the Stage → Review → Execute pattern and require your explicit approval.
+
+### CLI ↔ IDE handoff
+
+Copilot CLI supports seamless handoff to VS Code. Start with `/plan` in the terminal, then use the CLI-to-IDE flow to continue refining in your editor — or go the other direction.
+
+> **Tip:** If you primarily work in the terminal, Copilot CLI gives you the same MCP tools, role-aware skills, and safety guardrails as the VS Code experience — just in your shell.
 
 ---
 
@@ -353,20 +373,89 @@ OIL exposes **22 domain-specific tools** including `get_customer_context`, `sear
 
 ---
 
+## Optional: Power BI Analytics
+
+The **Power BI Remote MCP** connects Copilot to your Power BI semantic models so you can pull ACR telemetry, incentive baselines, consumption scorecards, and pipeline analytics — all from the chat window. No DAX knowledge required.
+
+### How to enable it
+
+1. **Start the server** — open `.vscode/mcp.json` in VS Code and click **Start** on `powerbi-remote`. It connects to the Fabric API directly — no local build needed.
+2. **Sign in** — Power BI uses your Azure CLI session. Make sure `az login` is current (same as CRM auth).
+
+### Creating a Power BI prompt (the guided path)
+
+Power BI workflows are packaged as **prompt files** (`.github/prompts/pbi-*.prompt.md`). Each prompt is a self-contained, repeatable workflow that pulls specific data from a semantic model and produces a formatted report.
+
+You don't need to know DAX or the model schema — the **pbi-prompt-builder** skill walks you through it interactively:
+
+1. **Start the builder** — ask Copilot:
+
+   ```
+   I want to build a Power BI prompt to track my gap to target across my Azure accounts.
+   ```
+
+   (Or: `Build me a PBI prompt`, `Create a Power BI report prompt`, `What data can I pull from Power BI?`)
+
+2. **Answer a few questions** — the skill asks what questions you want answered, which semantic model to use (it can discover available models for you), and where your account list lives.
+
+3. **Review the schema mapping** — Copilot shows you which tables and measures map to your questions, and flags anything the model can't answer.
+
+4. **Validate with live data** — Copilot generates DAX queries, runs them against your model, and shows sample results. You iterate until the data looks right.
+
+5. **Get a ready-to-use prompt** — the skill outputs a `pbi-*.prompt.md` file in `.github/prompts/` that you can run immediately.
+
+### Using a Power BI prompt
+
+Once a prompt exists, there are two ways to run it:
+
+- **Slash command** — type `/` in Copilot chat and select the prompt from the menu (e.g., `/pbi-azure-portfolio-review`)
+- **Natural language** — just describe what you want. Copilot matches your request to the prompt's `description` keywords automatically:
+
+  ```
+  Run my Azure portfolio review.
+  Which of my accounts qualify for the GHCP New Logo incentive?
+  ```
+
+The prompt handles auth pre-checks, DAX execution, business-rule application, and report formatting — you just read the output.
+
+### Customizing prompts for your team
+
+Every PBI prompt has a **Configuration** table at the top with the semantic model ID, account roster path, and business rules. Managers can fork a prompt and swap these values without touching DAX or workflow logic:
+
+```markdown
+| Setting | Value | Notes |
+|---|---|---|
+| **Semantic Model ID** | `726c8fed-...` | Change to your team's model |
+| **Account Roster** | `.docs/AccountReference.md` | Point to your account list |
+```
+
+### Included prompts
+
+Two PBI prompts ship out of the box:
+
+| Prompt | What it does |
+|---|---|
+| `/pbi-azure-portfolio-review` | ACR actuals vs. budget, pipeline conversion ranking, and recommended next actions across your Azure accounts |
+| `/pbi-ghcp-new-logo-incentive` | Evaluates tracked accounts against GHCP New Logo Growth Incentive eligibility and qualifying thresholds |
+
+> **Don't have Power BI access?** No problem — everything else works without it. Power BI is a read-only analytics layer that supplements CRM data.
+
+---
+
 ## Project Layout
 
 ![alt text](docs/assets/project-layout-flat.png)
 
-| Folder                              | What's inside                                                                                                                            | Editable?                                          |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `.github/copilot-instructions.md` | Global Copilot behavior — the "system prompt"                                                                                           | **Yes** — your main customization lever     |
-| `.github/instructions/`           | Operational rules loaded by keyword match                                                                                                | **Yes** — add your team's workflow gates    |
-| `.github/skills/`                 | 27 atomic domain skills (loaded on demand by keyword match)                                                                              | **Yes** — tailor to your operating model    |
-| `.github/prompts/`                | Reusable prompt templates (slash commands)                                                                                               | **Yes** — create workflows you repeat often |
-| `.vscode/mcp.json`                | MCP server definitions (CRM, WorkIQ, Obsidian)                                                                                           | **Yes** — add/remove data sources           |
-| `mcp/msx/`                        | MSX CRM MCP server*(subtree: [microsoft/msx-copilot-mcp](https://github.com/microsoft/msx-copilot-mcp))*                                  | Optional — works out of the box                   |
-| `mcp/oil/`                        | Obsidian Intelligence Layer*(subtree: [JinLee794/Obsidian-Intelligence-Layer](https://github.com/JinLee794/Obsidian-Intelligence-Layer))* | Optional — enables persistent vault memory        |
-| `docs/`                           | Architecture docs and supporting material                                                                                                | Reference only                                     |
+| Folder                              | What's inside                                                                                                                         | Editable?                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `.github/copilot-instructions.md` | Global Copilot behavior — the "system prompt"                                                                                        | **Yes** — your main customization lever     |
+| `.github/instructions/`           | Operational rules loaded by keyword match                                                                                             | **Yes** — add your team's workflow gates    |
+| `.github/skills/`                 | 27 atomic domain skills (loaded on demand by keyword match)                                                                           | **Yes** — tailor to your operating model    |
+| `.github/prompts/`                | Reusable prompt templates (slash commands)                                                                                            | **Yes** — create workflows you repeat often |
+| `.vscode/mcp.json`                | MCP server definitions (CRM, WorkIQ, Power BI, Obsidian)                                                                              | **Yes** — add/remove data sources           |
+| `mcp/msx/`                        | MSX CRM MCP server*(subtree:[microsoft/msx-copilot-mcp](https://github.com/microsoft/msx-copilot-mcp))*                                  | Optional — works out of the box                   |
+| `mcp/oil/`                        | Obsidian Intelligence Layer*(subtree:[JinLee794/Obsidian-Intelligence-Layer](https://github.com/JinLee794/Obsidian-Intelligence-Layer))* | Optional — enables persistent vault memory        |
+| `docs/`                           | Architecture docs and supporting material                                                                                             | Reference only                                     |
 
 > **Start here:** Open any file in `.github/` and read it. They're all plain Markdown. See the [Customization](#customization--make-it-yours) section for step-by-step examples.
 
@@ -377,16 +466,16 @@ OIL exposes **22 domain-specific tools** including `get_customer_context`, `sear
 
 These tools let Copilot interact with MSX CRM on your behalf:
 
-| Tool                              | What it does                                                   |
-| --------------------------------- | -------------------------------------------------------------- |
-| `crm_whoami`                    | Checks who you are in MSX (validates authentication)           |
-| `crm_query`                     | Runs read-only OData queries against CRM                       |
-| `crm_get_record`                | Fetches a specific CRM record by ID                            |
-| `list_opportunities`            | Lists opportunities, filterable by customer                    |
-| `get_milestones`                | Lists milestones for an opportunity or owner                   |
-| `find_milestones_needing_tasks` | Finds milestones across customers that need task attention     |
-| `view_milestone_timeline`       | Returns a timeline view of milestones                          |
-| `view_opportunity_cost_trend`   | Returns cost trend data for an opportunity                     |
+| Tool                              | What it does                                                 |
+| --------------------------------- | ------------------------------------------------------------ |
+| `crm_whoami`                    | Checks who you are in MSX (validates authentication)         |
+| `crm_query`                     | Runs read-only OData queries against CRM                     |
+| `crm_get_record`                | Fetches a specific CRM record by ID                          |
+| `list_opportunities`            | Lists opportunities, filterable by customer                  |
+| `get_milestones`                | Lists milestones for an opportunity or owner                 |
+| `find_milestones_needing_tasks` | Finds milestones across customers that need task attention   |
+| `view_milestone_timeline`       | Returns a timeline view of milestones                        |
+| `view_opportunity_cost_trend`   | Returns cost trend data for an opportunity                   |
 | `create_task`                   | ⚠️ Creates a new task under a milestone*(write — staged)* |
 | `update_task` / `close_task`  | ⚠️ Updates or closes an existing task*(write — staged)*   |
 | `update_milestone`              | ⚠️ Updates milestone status or details*(write — staged)*  |
@@ -568,6 +657,7 @@ The file [.vscode/mcp.json](.vscode/mcp.json) defines which MCP servers are avai
 | ----------- | ----------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `msx-crm` | **Enabled** | MSX CRM operations               | `crm_whoami`, `crm_query`, `list_opportunities`, `get_milestones`, `create_task`, etc. |
 | `workiq`  | **Enabled** | Microsoft 365 evidence retrieval | `ask_work_iq` (Teams, Outlook, SharePoint)                                                     |
+| `powerbi-remote` | **Enabled** | Power BI analytics | `DiscoverArtifacts`, `GetSemanticModelSchema`, `GenerateQuery`, `ExecuteQuery` |
 | `oil`     | Commented out     | Obsidian Intelligence Layer      | `get_customer_context`, `search_vault`, `prepare_crm_prefetch`, `promote_findings`, etc. |
 
 You can add any MCP-compatible server to this file. See the [Customization](#customization--make-it-yours) section for examples.
@@ -611,7 +701,8 @@ Here's what ships out of the box and what each piece does:
 │   ├── crm-entity-schema.instructions.md     ← CRM field names so Copilot builds correct queries
 │   ├── crm-query-strategy.instructions.md    ← CRM read query scoping strategy
 │   ├── connect-hooks.instructions.md         ← Evidence capture for Connect impact reporting
-│   └── obsidian-vault.instructions.md        ← Vault integration conventions
+│   ├── obsidian-vault.instructions.md        ← Vault integration conventions
+│   └── powerbi-mcp.instructions.md           ← Power BI auth, DAX discipline, prompt conventions
 ├── skills/                          ← 27 atomic domain skills (loaded on demand)
 │   ├── pipeline-qualification/SKILL.md       ← Qualify new opportunities (Stages 1-2)
 │   ├── milestone-health-review/SKILL.md      ← Committed milestone health (Stages 4-5)
@@ -620,6 +711,7 @@ Here's what ships out of the box and what each piece does:
 │   ├── handoff-readiness-validation/SKILL.md ← Cross-role handoff quality
 │   ├── mcem-stage-identification/SKILL.md    ← Identify current MCEM stage
 │   ├── workiq-query-scoping/SKILL.md         ← Scope M365 searches effectively
+│   ├── pbi-prompt-builder/SKILL.md           ← Interactive Power BI prompt builder
 │   ├── skill-authoring-best-practices/SKILL.md ← Guide for writing your own skills
 │   ├── ... (19 more atomic skills)           ← See directory for full list
 │   └── _legacy/                              ← Archived monolithic role skills (reference only)
@@ -629,7 +721,9 @@ Here's what ships out of the box and what each piece does:
 │   ├── weekly-digest.prompt.md      ← Weekly summary across customers + CRM
 │   ├── project-status.prompt.md     ← Project status from vault + CRM validation
 │   ├── create-person.prompt.md      ← Create a People note from meeting context
-│   └── sync-project-from-github.prompt.md ← Pull GitHub activity into vault
+│   ├── sync-project-from-github.prompt.md ← Pull GitHub activity into vault
+│   ├── pbi-azure-portfolio-review.prompt.md ← Azure ACR vs budget + pipeline ranking
+│   └── pbi-ghcp-new-logo-incentive.prompt.md ← GHCP incentive eligibility tracker
 └── documents/                       ← Reference docs (never auto-loaded, read on demand)
 ```
 

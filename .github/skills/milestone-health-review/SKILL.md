@@ -51,4 +51,4 @@ Produces a structured health report for committed milestones within CSAM scope, 
 - `internal_summary`: action items with owners and dates
 - `dry_run_updates`: update/task preview payloads
 - `next_action`: "Health review complete. Would you like to run `delivery-accountability-mapping` for blocked milestones?"
-- `connect_hook_hint`: Circle(s): Customer/Business, Team/Org — "Ran milestone health review for {customer}: {on_track} on-track, {at_risk} at-risk, {blocked} blocked — generated remediation queue with {n} action items"
+- `connect_hook_hint`: Impact Area(s): Customer Impact, Culture & Collaboration — "Ran milestone health review for {customer}: {on_track} on-track, {at_risk} at-risk, {blocked} blocked — generated remediation queue with {n} action items"
