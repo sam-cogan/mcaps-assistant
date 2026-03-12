@@ -14,7 +14,10 @@
     "docs:install": "pip install -r site/requirements.txt",
     "docs:serve": "mkdocs serve",
     "docs:build": "mkdocs build",
-    "docs:deploy": "mkdocs gh-deploy --force"
+    "docs:deploy": "mkdocs gh-deploy --force",
+    "subtree:sync": "bash scripts/subtree-sync.sh",
+    "subtree:sync:dry": "bash scripts/subtree-sync.sh --dry-run",
+    "subtree:sync:all": "bash scripts/subtree-sync.sh --all"
   },
   "engines": {
     "node": ">=18"
