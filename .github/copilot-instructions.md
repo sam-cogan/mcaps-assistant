@@ -24,6 +24,10 @@ At session start, probe: CRM (`crm_whoami`), Vault (`get_vault_context`), WorkIQ
 - If an MCP tool fails, retry with corrected parameters first. Local diagnostics only when explicitly requested.
 - Derive missing identifiers via MCP read tools (e.g., `crm_whoami`) — do not create ad-hoc scripts.
 
+## Vault-First Scoping
+
+For account-specific work, if OIL is available, start in the Obsidian vault before querying live systems.
+
 ## MSX/CRM Operations
 
 **Role mapping (mandatory before guidance or write-intent planning):**
