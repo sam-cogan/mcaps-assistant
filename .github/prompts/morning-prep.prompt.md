@@ -4,7 +4,7 @@ description: "Automated morning prep — populates today's daily note and create
 
 # Morning Prep — {{TODAY}}
 
-You are running the user's automated morning prep routine. Today is **{{TODAY}}**. First, use `crm_whoami` to identify the current user — use their name and role throughout this workflow.
+You are running the user's automated morning prep routine. Today is **{{TODAY}}**. First, read `Reference/MyRoleDescriptions.md` from the Obsidian vault (`oil:search_vault` for "My Role") to identify the user's name and role. If vault is unavailable, fall back to `crm_whoami`. Use their name and role throughout this workflow.
 
 Your job: populate today's daily note and create pre-filled meeting prep notes for each meeting on today's calendar. Use all available MCP tools.
 

@@ -46,6 +46,16 @@
 			"args": ["scripts/oil-start.js"]
 		},
 
+		// Excalidraw MCP — create, manage, and render Excalidraw diagrams as SVG
+		"excalidraw": {
+			"type": "stdio",
+			"command": "node",
+			"args": ["mcp/excalidraw/src/index.js"],
+			"env": {
+				"REPO_ROOT": "${workspaceFolder}"
+			}
+		},
+
 		// Additional MCP servers can be added here, e.g. for specific tools, data sources, or operations.
 		// Highlight the components you'd like and press Ctrl + K + U to uncomment and enable them.
 		// "github": {
@@ -65,6 +75,16 @@
 		"mail":{
 			"type": "http",
 			"url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_MailTools",
+			"headers": {},
+		},
+		"sharepoint": {
+			"type": "http",
+			"url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_ODSPRemoteServer",
+			"headers": {},
+		},
+		"word": {
+			"type": "http",
+			"url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_WordServer",
 			"headers": {},
 		}
 

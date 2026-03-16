@@ -2,8 +2,8 @@
 name: pbi-analyst
 description: "Power BI analysis subagent for heavy DAX workflows. Runs model discovery, query execution, and report rendering in an isolated context to prevent parent-context saturation."
 tools:
-  - powerbi-remote
-  - editFiles
+  - powerbi-remote/*
+  - edit/editFiles
   - grep
   - glob
   - view

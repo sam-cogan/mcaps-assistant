@@ -154,8 +154,8 @@ export function createAuthService({ crmUrl, tenantId }) {
     // Re-evaluate expiration against current time (metadata.expiresAt is a Date)
     if (state.metadata.expiresAt) {
       const remainingMs = state.metadata.expiresAt.getTime() - Date.now();
-      // Refresh if expired or expiring within 2 minutes
-      if (remainingMs < 120_000) return false;
+      // Refresh if expired or expiring within 10 minutes (keeps MSAL refresh token warm)
+      if (remainingMs < 600_000) return false;
     }
     return true;
   };
