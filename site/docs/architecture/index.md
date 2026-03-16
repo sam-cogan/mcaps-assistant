@@ -38,4 +38,10 @@ MCAPS IQ is a collection of **MCP servers**, **domain skills**, and **instructio
 
     How write operations work and why you're always in control.
 
+-   :material-shield-alert:{ .lg .middle } __[Threat Model](threat-model.md)__
+
+    ---
+
+    STRIDE analysis, trust boundaries, mitigations, and residual risks for the full MCP toolchain.
+
 </div>

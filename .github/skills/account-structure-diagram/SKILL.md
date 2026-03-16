@@ -107,7 +107,7 @@ Generate a valid Excalidraw JSON scene wrapped in an Obsidian-compatible code bl
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "mcaps-copilot-tools",
+  "source": "mcaps-iq",
   "elements": [
     {
       "type": "rectangle",

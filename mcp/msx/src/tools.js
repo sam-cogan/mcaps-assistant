@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isValidGuid, normalizeGuid, isValidTpid, sanitizeODataString } from './validation.js';
 import { getApprovalQueue } from './approval-queue.js';
 import { auditLog } from './audit.js';
+import { detectInjection, formatDetectionWarning, formatWriteWarning } from './prompt-guard.js';
 
 // ── Entity allowlist ─────────────────────────────────────────
 // Only these Dynamics 365 entity sets may be queried via crm_query
@@ -62,7 +63,8 @@ const MILESTONE_SELECT = [
 const OPP_SELECT = [
   'opportunityid', 'name', 'estimatedclosedate',
   'msp_estcompletiondate', 'msp_consumptionconsumedrecurring',
-  '_ownerid_value', '_parentaccountid_value', 'msp_salesplay'
+  '_ownerid_value', '_parentaccountid_value', 'msp_salesplay', 'msp_opportunitynumber',
+  'msp_activesalesstage', 'estimatedvalue'
 ].join(',');
 
 const TASK_CATEGORIES = [
@@ -205,9 +207,73 @@ function resolvePayloadLabels(payload) {
 
 /** Maximum records crm_query will return via auto-pagination. */
 export const CRM_QUERY_MAX_RECORDS = 500;
+const EXECUTE_ALL_CONFIRM_TOKEN = 'EXECUTE_ALL';
+
+const UNSAFE_QUERY_CHARS = /[;\r\n]/;
+const SELECT_PATTERN = /^[a-zA-Z0-9_,.$ ]+$/;
+const ORDERBY_PATTERN = /^[a-zA-Z0-9_,.$ ]+$/;
+const EXPAND_PATTERN = /^[a-zA-Z0-9_,.$()=;\- ]+$/;
+
+function validateODataFragment(name, value, pattern) {
+  if (value === undefined || value === null) return null;
+  if (UNSAFE_QUERY_CHARS.test(value)) return `${name} contains unsafe control characters`;
+  if (!pattern.test(value)) return `${name} contains unsupported characters`;
+  return null;
+}
 
 const text = (content) => ({ content: [{ type: 'text', text: typeof content === 'string' ? content : JSON.stringify(content, null, 2) }] });
 const error = (msg) => ({ content: [{ type: 'text', text: msg }], isError: true });
+
+/**
+ * Build a staged-write tool response. Scans the payload and beforeState
+ * for prompt injection indicators and surfaces warnings in the response.
+ */
+function stagedResponse(responseObj) {
+  const scanTargets = [responseObj.payload, responseObj.before, responseObj.beforeState].filter(Boolean);
+  const detections = scanTargets.flatMap(t => detectInjection(t, `staged_write:${responseObj.operationId}`));
+  const highSeverity = detections.filter(d => d.severity === 'high');
+
+  if (highSeverity.length > 0) {
+    // Remove staged operation when high-severity prompt injection indicators are detected.
+    if (responseObj.operationId) {
+      const queue = getApprovalQueue();
+      queue.reject(responseObj.operationId);
+    }
+    const details = highSeverity
+      .slice(0, 5)
+      .map(d => `[${d.id}] ${d.description} at ${d.field}`)
+      .join('; ');
+    return error(
+      `Write blocked: high-severity prompt injection indicators detected (${highSeverity.length}). ` +
+      `Details: ${details}`
+    );
+  }
+
+  const warning = formatWriteWarning(detections);
+  if (warning) responseObj.injectionWarning = warning;
+  return text(responseObj);
+}
+
+// ── AI Attribution (RH-2) ─────────────────────────────────────
+const AI_ATTRIBUTION = '[AI-assisted via MCAPS-IQ]';
+
+/** Append AI attribution to a string field if not already present. */
+function withAttribution(value) {
+  // Preserve non-string values and empty strings without injecting attribution.
+  if (typeof value !== 'string') return value;
+  if (value === '') return value;
+  if (value.includes(AI_ATTRIBUTION)) return value;
+  return `${value} ${AI_ATTRIBUTION}`;
+}
+
+/** Format a numeric value as USD currency. Returns null/empty if value is null/undefined/zero.
+ *  Used for msp_consumptionconsumedrecurring and monthly use fields. */
+function formatCurrency(value) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  if (Number.isNaN(num) || num === 0) return null;
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/month`;
+}
 
 /** Build a Dynamics 365 deep-link URL to open a record in the browser. */
 function buildRecordUrl(crmBaseUrl, entityLogicalName, guid) {
@@ -227,6 +293,97 @@ function toIsoDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().slice(0, 10);
+}
+
+function deriveOpportunityHealth(opportunity) {
+  const completion = toIsoDate(opportunity?.msp_estcompletiondate);
+  if (!completion) return 'Unknown';
+  const today = toIsoDate(new Date().toISOString());
+  if (completion < today) return 'At Risk';
+
+  const d1 = new Date(completion);
+  const d2 = new Date(today);
+  const diffDays = Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 14) return 'Watch';
+  return 'On Track';
+}
+
+function chunkArray(items, chunkSize = 25) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += chunkSize) chunks.push(items.slice(i, i + chunkSize));
+  return chunks;
+}
+
+function deriveOpportunityStage(opportunity, stageNameById) {
+  // Prefer msp_activesalesstage (human-readable, pre-resolved by CRM)
+  if (opportunity?.msp_activesalesstage) return opportunity.msp_activesalesstage;
+  const formatted = fv(opportunity, '_activestageid_value');
+  if (formatted) return formatted;
+  const stageId = opportunity?._activestageid_value;
+  if (!stageId) return null;
+  return stageNameById?.[stageId] || stageId;
+}
+
+async function resolveStageNames(crmClient, opportunities) {
+  const stageIds = [...new Set(
+    opportunities
+      .map(o => o._activestageid_value)
+      .filter(Boolean)
+  )];
+  if (!stageIds.length) return {};
+
+  const stageNameById = {};
+  for (const chunk of chunkArray(stageIds, 25)) {
+    const filter = chunk.map(id => `processstageid eq '${sanitizeODataString(id)}'`).join(' or ');
+    const result = await crmClient.requestAllPages('processstages', {
+      query: { $filter: filter, $select: 'processstageid,stagename' }
+    });
+    if (!result.ok) continue;
+    for (const stage of result.data?.value || []) {
+      if (stage.processstageid && stage.stagename) {
+        stageNameById[stage.processstageid] = stage.stagename;
+      }
+    }
+  }
+  return stageNameById;
+}
+
+async function resolveDealTeamMembers(crmClient, opportunities) {
+  const opportunityIds = [...new Set(opportunities.map(o => o.opportunityid).filter(Boolean))];
+  const dealTeamByOpportunity = {};
+  if (!opportunityIds.length) return { dealTeamByOpportunity, available: true };
+
+  for (const chunk of chunkArray(opportunityIds, 25)) {
+    const filterClause = chunk.map(id => `_msp_parentopportunityid_value eq '${sanitizeODataString(id)}'`).join(' or ');
+    const result = await crmClient.requestAllPages('msp_dealteams', {
+      query: {
+        $filter: `(${filterClause}) and statecode eq 0`,
+        $select: '_msp_parentopportunityid_value,_msp_dealteamuserid_value'
+      }
+    });
+
+    if (!result.ok) {
+      return {
+        dealTeamByOpportunity,
+        available: false,
+        error: result.data?.message || 'msp_dealteams unavailable'
+      };
+    }
+
+    for (const row of result.data?.value || []) {
+      const oppId = row._msp_parentopportunityid_value;
+      if (!oppId) continue;
+      const memberId = row._msp_dealteamuserid_value || null;
+      const memberName = fv(row, '_msp_dealteamuserid_value') || memberId || 'Unknown';
+      if (!dealTeamByOpportunity[oppId]) dealTeamByOpportunity[oppId] = [];
+      const exists = dealTeamByOpportunity[oppId].some(member => member.userId === memberId && member.name === memberName);
+      if (!exists) {
+        dealTeamByOpportunity[oppId].push({ userId: memberId, name: memberName });
+      }
+    }
+  }
+
+  return { dealTeamByOpportunity, available: true };
 }
 
 /** Map task statusCode to the required statecode for Dynamics 365 state transitions. */
@@ -274,6 +431,7 @@ function buildMilestoneSummary(milestones, crmBaseUrl) {
       ...m,
       status: fv(m, 'msp_milestonestatus'),
       commitment: commitmentLabel(m),
+      monthlyUse: formatCurrency(m.msp_monthlyuse),
       opportunity: fv(m, '_msp_opportunityid_value'),
       recordUrl: buildRecordUrl(crmBaseUrl, 'msp_engagementmilestone', m.msp_engagementmilestoneid)
     }))
@@ -307,6 +465,7 @@ function buildMilestoneTriage(milestones, crmBaseUrl) {
       status,
       commitment,
       date,
+      monthlyUse: formatCurrency(m.msp_monthlyuse),
       opportunity: fv(m, '_msp_opportunityid_value'),
       workload: fv(m, '_msp_workloadlkid_value'),
       recordUrl: buildRecordUrl(crmBaseUrl, 'msp_engagementmilestone', m.msp_engagementmilestoneid)
@@ -435,11 +594,21 @@ export function registerTools(server, crmClient) {
         );
       }
 
+      const selectErr = validateODataFragment('select', select, SELECT_PATTERN);
+      if (selectErr) return error(selectErr);
+      const orderbyErr = validateODataFragment('orderby', orderby, ORDERBY_PATTERN);
+      if (orderbyErr) return error(orderbyErr);
+      const expandErr = validateODataFragment('expand', expand, EXPAND_PATTERN);
+      if (expandErr) return error(expandErr);
+      if (top !== undefined && (!Number.isInteger(top) || top < 1)) {
+        return error('top must be a positive integer');
+      }
+
       const query = {};
       if (filter) query.$filter = filter;
       if (select) query.$select = select;
       if (orderby) query.$orderby = orderby;
-      if (top) query.$top = String(Math.min(top, CRM_QUERY_MAX_RECORDS));
+      if (top !== undefined) query.$top = String(Math.min(top, CRM_QUERY_MAX_RECORDS));
       if (expand) query.$expand = expand;
 
       const result = await crmClient.requestAllPages(entitySet, { query, maxRecords: CRM_QUERY_MAX_RECORDS });
@@ -447,7 +616,13 @@ export function registerTools(server, crmClient) {
 
       const records = result.data?.value || (result.data ? [result.data] : []);
       auditLog({ tool: 'crm_query', entitySet, params: { filter, select, top }, recordCount: records.length });
-      return text({ count: records.length, value: records });
+      const piDetections = detectInjection(records, `crm_query:${entitySet}`);
+      const warning = formatDetectionWarning(piDetections);
+      const body = JSON.stringify({ count: records.length, value: records }, null, 2);
+      const content = [];
+      if (warning) content.push({ type: 'text', text: warning });
+      content.push({ type: 'text', text: body });
+      return { content };
     }
   );
 
@@ -479,54 +654,172 @@ export function registerTools(server, crmClient) {
       const result = await crmClient.request(`${entitySet}(${normalized})`, { query });
       if (!result.ok) return error(`Get record failed (${result.status}): ${result.data?.message}`);
       auditLog({ tool: 'crm_get_record', entitySet, recordCount: 1 });
-      return text(result.data);
+      const piDetections = detectInjection(result.data, `crm_get_record:${entitySet}`);
+      const warning = formatDetectionWarning(piDetections);
+      const body = JSON.stringify(result.data, null, 2);
+      const content = [];
+      if (warning) content.push({ type: 'text', text: warning });
+      content.push({ type: 'text', text: body });
+      return { content };
     }
   );
 
   // ── list_opportunities ──────────────────────────────────────
   server.tool(
     'list_opportunities',
-    'List open opportunities for one or more account IDs or by customer name keyword. Returns opportunity name, dates, owner, solution play.',
+    'List open opportunities for one or more account IDs or by customer name keyword. Returns stage, estimated close date, and deal team details.',
     {
+      opportunityIds: z.array(z.string()).optional().describe('Optional list of opportunity GUIDs for direct lookup'),
+      opportunityKeyword: z.string().optional().describe('Optional opportunity name keyword for direct lookup'),
       accountIds: z.array(z.string()).optional().describe('Array of Dynamics 365 account GUIDs'),
       customerKeyword: z.string().optional().describe('Customer name keyword — resolves matching accounts internally'),
-      includeCompleted: z.boolean().optional().default(false).describe('Include opportunities past their estimated completion date (default: false)')
+      includeCompleted: z.boolean().optional().default(false).describe('Include opportunities past their estimated completion date (default: false)'),
+      includeDealTeam: z.boolean().optional().default(true).describe('When false, skips deal-team enrichment for faster responses (default: true)'),
+      format: z.enum(['full', 'compact']).optional().describe('Output format: full (default) or compact (id, name, stage, close date, revenue, health)')
     },
-    async ({ accountIds, customerKeyword, includeCompleted }) => {
+    async ({ opportunityIds, opportunityKeyword, accountIds, customerKeyword, includeCompleted, includeDealTeam, format }) => {
+      // Direct opportunity ID lookup path
+      let allOpps = [];
+      let lookupAttempted = false;
+      if (opportunityIds?.length) {
+        lookupAttempted = true;
+        const resolvedOppIds = opportunityIds.map(normalizeGuid).filter(isValidGuid);
+        if (!resolvedOppIds.length) return error('No valid opportunity GUIDs in opportunityIds');
+        for (const chunk of chunkArray(resolvedOppIds, 25)) {
+          let filter = `(${chunk.map(id => `opportunityid eq '${id}'`).join(' or ')}) and statecode eq 0`;
+          if (!includeCompleted) {
+            filter += ` and (msp_estcompletiondate ge ${daysAgo(30)} or msp_estcompletiondate eq null)`;
+          }
+          const result = await crmClient.requestAllPages('opportunities', {
+            query: { $filter: filter, $select: OPP_SELECT, $orderby: 'name' }
+          });
+          if (result.ok && result.data?.value) allOpps.push(...result.data.value);
+        }
+        if (!allOpps.length) {
+          return text({ count: 0, opportunities: [], format: format || 'full', includeDealTeam: includeDealTeam !== false, message: `No active opportunities found for the provided ${resolvedOppIds.length} ID(s). They may be closed or past their estimated completion date — retry with includeCompleted: true to include them.` });
+        }
+      } else if (opportunityKeyword) {
+        // Direct opportunity name lookup path
+        const sanitized = sanitizeODataString(opportunityKeyword.trim());
+        let filter = `contains(name,'${sanitized}') and statecode eq 0`;
+        if (!includeCompleted) {
+          filter += ` and (msp_estcompletiondate ge ${daysAgo(30)} or msp_estcompletiondate eq null)`;
+        }
+        const result = await crmClient.requestAllPages('opportunities', {
+          query: { $filter: filter, $select: OPP_SELECT, $orderby: 'name', $top: '200' }
+        });
+        if (result.ok && result.data?.value) allOpps.push(...result.data.value);
+        if (!allOpps.length) {
+          return text({ count: 0, opportunities: [], format: format || 'full', includeDealTeam: includeDealTeam !== false, message: `No active opportunities found matching '${opportunityKeyword}'` });
+        }
+      }
+
+      // Account/customer scoped lookup path (fallback)
       let resolvedIds = accountIds ? accountIds.map(normalizeGuid).filter(isValidGuid) : [];
 
       // Resolve customerKeyword → account GUIDs
-      if (!resolvedIds.length && customerKeyword) {
+      if (!allOpps.length && !resolvedIds.length && customerKeyword) {
         const sanitized = sanitizeODataString(customerKeyword.trim());
         const acctResult = await crmClient.requestAllPages('accounts', {
           query: { $filter: `contains(name,'${sanitized}')`, $select: 'accountid,name', $top: '50' }
         });
         const matchedAccounts = acctResult.ok ? (acctResult.data?.value || []) : [];
         if (!matchedAccounts.length) {
-          return text({ count: 0, opportunities: [], matchedAccounts: [], message: `No accounts found matching '${customerKeyword}'` });
+          // Fallback: treat customerKeyword as opportunity name keyword when account-name lookup misses.
+          let filter = `contains(name,'${sanitized}') and statecode eq 0`;
+          if (!includeCompleted) {
+            filter += ` and (msp_estcompletiondate ge ${daysAgo(30)} or msp_estcompletiondate eq null)`;
+          }
+          const oppResult = await crmClient.requestAllPages('opportunities', {
+            query: { $filter: filter, $select: OPP_SELECT, $orderby: 'name', $top: '200' }
+          });
+          if (oppResult.ok && oppResult.data?.value) {
+            allOpps.push(...oppResult.data.value);
+          }
+          if (!allOpps.length) {
+            return text({ count: 0, opportunities: [], matchedAccounts: [], message: `No accounts or active opportunities found matching '${customerKeyword}'` });
+          }
+        } else {
+          resolvedIds = matchedAccounts.map(a => a.accountid);
         }
-        resolvedIds = matchedAccounts.map(a => a.accountid);
       }
 
-      if (!resolvedIds.length) return error('Provide accountIds array or customerKeyword');
+      if (!allOpps.length && !resolvedIds.length && !lookupAttempted) {
+        return error('Provide opportunityIds, opportunityKeyword, accountIds, or customerKeyword');
+      }
+      if (!allOpps.length && !resolvedIds.length && lookupAttempted) {
+        return text({ count: 0, opportunities: [], format: format || 'full', message: 'No active opportunities matched the provided scoping parameters.' });
+      }
 
       // Chunk into groups of 25 to keep filter URL manageable
-      const chunks = [];
-      for (let i = 0; i < resolvedIds.length; i += 25) chunks.push(resolvedIds.slice(i, i + 25));
+      const chunks = chunkArray(resolvedIds, 25);
 
-      const allOpps = [];
-      for (const chunk of chunks) {
-        let filter = `(${chunk.map(id => `_parentaccountid_value eq '${id}'`).join(' or ')}) and statecode eq 0`;
-        if (!includeCompleted) {
-          filter += ` and msp_estcompletiondate ge ${daysAgo(30)}`;
+      if (!allOpps.length) {
+        for (const chunk of chunks) {
+          let filter = `(${chunk.map(id => `_parentaccountid_value eq '${id}'`).join(' or ')}) and statecode eq 0`;
+          if (!includeCompleted) {
+            filter += ` and (msp_estcompletiondate ge ${daysAgo(30)} or msp_estcompletiondate eq null)`;
+          }
+          const result = await crmClient.requestAllPages('opportunities', {
+            query: { $filter: filter, $select: OPP_SELECT, $orderby: 'name' }
+          });
+          if (result.ok && result.data?.value) allOpps.push(...result.data.value);
         }
-        const result = await crmClient.requestAllPages('opportunities', {
-          query: { $filter: filter, $select: OPP_SELECT, $orderby: 'name' }
-        });
-        if (result.ok && result.data?.value) allOpps.push(...result.data.value);
       }
 
-      return text({ count: allOpps.length, opportunities: allOpps.map(o => ({ ...o, recordUrl: buildRecordUrl(getCrmBase(), 'opportunity', o.opportunityid) })) });
+      const base = getCrmBase();
+      const stageNameById = await resolveStageNames(crmClient, allOpps);
+      const dealTeamInfo = includeDealTeam !== false
+        ? await resolveDealTeamMembers(crmClient, allOpps)
+        : { dealTeamByOpportunity: {}, available: true, skipped: true };
+      const normalized = allOpps.map(o => {
+        const stage = deriveOpportunityStage(o, stageNameById);
+        const estimatedCloseDate = o.estimatedclosedate || o.msp_estcompletiondate || null;
+        const dealTeam = includeDealTeam !== false
+          ? (dealTeamInfo.dealTeamByOpportunity[o.opportunityid] || [])
+          : [];
+        return {
+          id: o.opportunityid,
+          opportunityNumber: o.msp_opportunitynumber ?? null,
+          name: o.name,
+          stage,
+          estimatedCloseDate,
+          closeDate: estimatedCloseDate,
+          revenue: o.estimatedvalue ?? null,
+          monthlyUse: formatCurrency(o.msp_consumptionconsumedrecurring),
+          health: deriveOpportunityHealth(o),
+          dealTeam,
+          dealTeamCount: dealTeam.length,
+          dealTeamSource: dealTeamInfo.skipped
+            ? 'skipped'
+            : (dealTeamInfo.available ? 'msp_dealteams' : 'unavailable'),
+          recordUrl: buildRecordUrl(base, 'opportunity', o.opportunityid)
+        };
+      });
+      const normalizedById = Object.fromEntries(normalized.map(n => [n.id, n]));
+
+      const opportunities = format === 'compact'
+        ? normalized
+        : allOpps.map(o => {
+          const enriched = normalizedById[o.opportunityid];
+          return {
+            ...o,
+            stage: enriched?.stage ?? null,
+            estimatedCloseDate: enriched?.estimatedCloseDate ?? null,
+            closeDate: enriched?.closeDate ?? null,
+            health: enriched?.health ?? 'Unknown',
+            dealTeam: enriched?.dealTeam || [],
+            dealTeamCount: enriched?.dealTeamCount ?? 0,
+            dealTeamSource: enriched?.dealTeamSource || 'unavailable',
+            recordUrl: enriched?.recordUrl || buildRecordUrl(base, 'opportunity', o.opportunityid)
+          };
+        });
+
+      const response = { count: opportunities.length, opportunities, format: format || 'full', includeDealTeam: includeDealTeam !== false };
+      if (!dealTeamInfo.available) {
+        response.dealTeamWarning = 'Deal team details unavailable from msp_dealteams in this environment.';
+      }
+      return text(response);
     }
   );
 
@@ -563,7 +856,7 @@ export function registerTools(server, crmClient) {
           query: { $select: MILESTONE_SELECT }
         });
         if (!result.ok) return error(`Milestone lookup failed (${result.status}): ${result.data?.message}`);
-        const milestone = { ...result.data, commitment: commitmentLabel(result.data), recordUrl: buildRecordUrl(getCrmBase(), 'msp_engagementmilestone', nid) };
+        const milestone = { ...result.data, commitment: commitmentLabel(result.data), monthlyUse: formatCurrency(result.data.msp_monthlyuse), recordUrl: buildRecordUrl(getCrmBase(), 'msp_engagementmilestone', nid) };
         if (includeTasks) {
           milestone.tasks = await fetchTasksForMilestones(crmClient, [nid]);
         }
@@ -587,7 +880,7 @@ export function registerTools(server, crmClient) {
         for (let i = 0; i < acctIds.length; i += 25) acctChunks.push(acctIds.slice(i, i + 25));
         const allOpps = [];
         for (const chunk of acctChunks) {
-          const acctFilter = `(${chunk.map(id => `_parentaccountid_value eq '${id}'`).join(' or ')}) and statecode eq 0 and msp_estcompletiondate ge ${cutoff}`;
+          const acctFilter = `(${chunk.map(id => `_parentaccountid_value eq '${id}'`).join(' or ')}) and statecode eq 0 and (msp_estcompletiondate ge ${cutoff} or msp_estcompletiondate eq null)`;
           const oppResult = await crmClient.requestAllPages('opportunities', {
             query: { $filter: acctFilter, $select: 'opportunityid,name', $orderby: 'name' }
           });
@@ -605,7 +898,7 @@ export function registerTools(server, crmClient) {
         const cutoff = daysAgo(30);
         const oppResult = await crmClient.requestAllPages('opportunities', {
           query: {
-            $filter: `contains(name,'${sanitized}') and statecode eq 0 and msp_estcompletiondate ge ${cutoff}`,
+            $filter: `contains(name,'${sanitized}') and statecode eq 0 and (msp_estcompletiondate ge ${cutoff} or msp_estcompletiondate eq null)`,
             $select: 'opportunityid,name',
             $orderby: 'name',
             $top: '50'
@@ -710,34 +1003,31 @@ export function registerTools(server, crmClient) {
       }
       if (format === 'summary') return text(buildMilestoneSummary(milestones, getCrmBase()));
       if (format === 'triage') return text(buildMilestoneTriage(milestones, getCrmBase()));
-      return text({ count: milestones.length, milestones: milestones.map(m => ({ ...m, commitment: commitmentLabel(m), recordUrl: buildRecordUrl(getCrmBase(), 'msp_engagementmilestone', m.msp_engagementmilestoneid) })) });
+      return text({ count: milestones.length, milestones: milestones.map(m => ({ ...m, commitment: commitmentLabel(m), monthlyUse: formatCurrency(m.msp_monthlyuse), recordUrl: buildRecordUrl(getCrmBase(), 'msp_engagementmilestone', m.msp_engagementmilestoneid) })) });
     }
   );
 
   // ── get_my_active_opportunities ─────────────────────────────
   server.tool(
     'get_my_active_opportunities',
-    'Returns active opportunities where you are the owner or on the deal team (via msp_dealteams entity). Falls back to milestone-ownership heuristic if msp_dealteams is unavailable. Optionally filter by customer name.',
+    'Returns active opportunities where you are on the deal team or are the owner. Primary discovery is via msp_dealteams entity (deal-team-first), then augmented with owned opportunities. Falls back to milestone-ownership heuristic if msp_dealteams is unavailable. Each opportunity is tagged with relationship (owner, deal-team, or both) and enriched with stage name, health, and deal team members. The recordUrl is embedded on the opportunityNumber field for direct linking.',
     {
-      customerKeyword: z.string().optional().describe('Case-insensitive customer name filter')
+      customerKeyword: z.string().optional().describe('Case-insensitive customer name filter'),
+      maxResults: z.number().int().min(1).max(200).optional().describe('Optional cap on returned opportunities (1-200) for large portfolios'),
+      includeDealTeam: z.boolean().optional().default(true).describe('When false, skips deal-team member enrichment for faster responses (default: true)')
     },
-    async ({ customerKeyword }) => {
+    async ({ customerKeyword, maxResults, includeDealTeam }) => {
       const whoAmI = await crmClient.request('WhoAmI');
       if (!whoAmI.ok || !whoAmI.data?.UserId) {
         return error(`Unable to resolve current CRM user (${whoAmI.status}): ${whoAmI.data?.message || 'WhoAmI failed'}`);
       }
       const userId = normalizeGuid(whoAmI.data.UserId);
-
-      // 1. Owned opportunities (exclude completion dates > 30 days ago)
       const cutoff = daysAgo(30);
-      const ownedResult = await crmClient.requestAllPages('opportunities', {
-        query: { $filter: `_ownerid_value eq '${userId}' and statecode eq 0 and msp_estcompletiondate ge ${cutoff}`, $select: OPP_SELECT, $orderby: 'name' }
-      });
-      const ownedOpps = (ownedResult.ok ? ownedResult.data?.value : []) || [];
-      const ownedIds = new Set(ownedOpps.map(o => o.opportunityid));
+      const base = getCrmBase();
 
-      // 2. Discover deal-team opps via explicit deal-team membership
-      const dealTeamOppIds = [];
+      // 1. Deal-team-first: discover all opportunities where user is on the deal team
+      let dealTeamAllOppIds = [];
+      let dealTeamAvailable = true;
       const dealTeamResult = await crmClient.requestAllPages('msp_dealteams', {
         query: {
           $filter: `_msp_dealteamuserid_value eq '${userId}' and statecode eq 0`,
@@ -748,9 +1038,10 @@ export function registerTools(server, crmClient) {
       if (dealTeamResult.ok && dealTeamResult.data?.value) {
         for (const row of dealTeamResult.data.value) {
           const oppId = row._msp_parentopportunityid_value;
-          if (oppId && !ownedIds.has(oppId) && !dealTeamOppIds.includes(oppId)) dealTeamOppIds.push(oppId);
+          if (oppId && !dealTeamAllOppIds.includes(oppId)) dealTeamAllOppIds.push(oppId);
         }
       } else {
+        dealTeamAvailable = false;
         // Fallback: infer deal-team involvement via milestone ownership
         const msResult = await crmClient.requestAllPages('msp_engagementmilestones', {
           query: { $filter: `_ownerid_value eq '${userId}'`, $select: '_msp_opportunityid_value' }
@@ -758,45 +1049,97 @@ export function registerTools(server, crmClient) {
         if (msResult.ok && msResult.data?.value) {
           for (const m of msResult.data.value) {
             const oppId = m._msp_opportunityid_value;
-            if (oppId && !ownedIds.has(oppId) && !dealTeamOppIds.includes(oppId)) dealTeamOppIds.push(oppId);
+            if (oppId && !dealTeamAllOppIds.includes(oppId)) dealTeamAllOppIds.push(oppId);
           }
         }
       }
 
-      // 3. Fetch deal-team opportunities
-      let dealTeamOpps = [];
-      if (dealTeamOppIds.length) {
-        const dtFilter = dealTeamOppIds.map(id => `opportunityid eq '${id}'`).join(' or ');
-        const dtResult = await crmClient.requestAllPages('opportunities', {
-          query: { $filter: `(${dtFilter}) and statecode eq 0 and msp_estcompletiondate ge ${cutoff}`, $select: OPP_SELECT, $orderby: 'name' }
-        });
-        if (dtResult.ok && dtResult.data?.value) dealTeamOpps = dtResult.data.value;
+      // 2. Fetch all deal-team opportunities (active state only)
+      const allOppsById = new Map();
+      if (dealTeamAllOppIds.length) {
+        for (const chunk of chunkArray(dealTeamAllOppIds, 25)) {
+          const dtFilter = chunk.map(id => `opportunityid eq '${sanitizeODataString(id)}'`).join(' or ');
+          const dtResult = await crmClient.requestAllPages('opportunities', {
+            query: { $filter: `(${dtFilter}) and statecode eq 0 and (msp_estcompletiondate ge ${cutoff} or msp_estcompletiondate eq null)`, $select: OPP_SELECT, $orderby: 'name' }
+          });
+          if (dtResult.ok && dtResult.data?.value) {
+            for (const o of dtResult.data.value) allOppsById.set(o.opportunityid, o);
+          }
+        }
       }
 
-      // 4. Combine and tag
-      const base = getCrmBase();
-      let opportunities = [
-        ...ownedOpps.map(o => ({
-          ...o,
-          customer: fv(o, '_parentaccountid_value') || null,
-          relationship: 'owner',
-          recordUrl: buildRecordUrl(base, 'opportunity', o.opportunityid)
-        })),
-        ...dealTeamOpps.map(o => ({
-          ...o,
-          customer: fv(o, '_parentaccountid_value') || null,
-          relationship: 'deal-team',
-          recordUrl: buildRecordUrl(base, 'opportunity', o.opportunityid)
-        }))
-      ];
+      // 3. Also fetch owned opportunities and merge (may include opps where user is owner but not on deal team record)
+      const ownedResult = await crmClient.requestAllPages('opportunities', {
+        query: { $filter: `_ownerid_value eq '${userId}' and statecode eq 0 and (msp_estcompletiondate ge ${cutoff} or msp_estcompletiondate eq null)`, $select: OPP_SELECT, $orderby: 'name' }
+      });
+      const ownedIds = new Set();
+      if (ownedResult.ok && ownedResult.data?.value) {
+        for (const o of ownedResult.data.value) {
+          ownedIds.add(o.opportunityid);
+          if (!allOppsById.has(o.opportunityid)) allOppsById.set(o.opportunityid, o);
+        }
+      }
 
-      // 5. Filter by customerKeyword
+      // 4. Determine relationship per opportunity
+      const dealTeamOppIdSet = new Set(dealTeamAllOppIds);
+      const allOpps = [...allOppsById.values()];
+
+      // 5. Enrich with stage names and deal team members
+      const stageNameById = await resolveStageNames(crmClient, allOpps);
+      const dealTeamInfo = includeDealTeam !== false
+        ? await resolveDealTeamMembers(crmClient, allOpps)
+        : { dealTeamByOpportunity: {}, available: true, skipped: true };
+
+      // 6. Build enriched output
+      let opportunities = allOpps.map(o => {
+        const isOwned = ownedIds.has(o.opportunityid);
+        const isOnDealTeam = dealTeamOppIdSet.has(o.opportunityid);
+        const relationship = isOwned && isOnDealTeam ? 'both' : isOwned ? 'owner' : 'deal-team';
+        const stage = deriveOpportunityStage(o, stageNameById);
+        const estimatedCloseDate = o.msp_estcompletiondate || o.estimatedclosedate || null;
+        const dealTeam = includeDealTeam !== false
+          ? (dealTeamInfo.dealTeamByOpportunity[o.opportunityid] || [])
+          : [];
+        const recordUrl = buildRecordUrl(base, 'opportunity', o.opportunityid);
+        return {
+          id: o.opportunityid,
+          opportunityNumber: o.msp_opportunitynumber ?? null,
+          name: o.name,
+          customer: fv(o, '_parentaccountid_value') || null,
+          stage,
+          estimatedCloseDate,
+          revenue: o.estimatedvalue ?? null,
+          monthlyUse: formatCurrency(o.msp_consumptionconsumedrecurring),
+          health: deriveOpportunityHealth(o),
+          relationship,
+          dealTeam,
+          dealTeamCount: dealTeam.length,
+          dealTeamSource: dealTeamInfo.skipped
+            ? 'skipped'
+            : (dealTeamInfo.available ? 'msp_dealteams' : (dealTeamAvailable ? 'msp_dealteams' : 'milestone-fallback')),
+          recordUrl
+        };
+      });
+
+      // 7. Filter by customerKeyword
       if (customerKeyword) {
         const kw = customerKeyword.toLowerCase();
         opportunities = opportunities.filter(o => (o.customer || '').toLowerCase().includes(kw));
       }
 
-      return text({ count: opportunities.length, opportunities });
+      const totalCount = opportunities.length;
+      if (maxResults) {
+        opportunities = opportunities.slice(0, maxResults);
+      }
+
+      const response = { count: opportunities.length, totalCount, opportunities, maxResults: maxResults || null };
+      if (!dealTeamAvailable) {
+        response.dealTeamDiscoveryNote = 'msp_dealteams was unavailable; deal-team discovery fell back to milestone-ownership heuristic.';
+      }
+      if (dealTeamInfo && !dealTeamInfo.available && !dealTeamInfo.skipped) {
+        response.dealTeamWarning = 'Deal team member details unavailable from msp_dealteams in this environment.';
+      }
+      return text(response);
     }
   );
 
@@ -919,6 +1262,11 @@ export function registerTools(server, crmClient) {
         payload['transactioncurrencyid@odata.bind'] = `/transactioncurrencies(${currencyNid})`;
       }
 
+      // AI attribution (RH-2) — only tag if the user provided forecast comments
+      if (payload.msp_forecastcomments !== undefined) {
+        payload.msp_forecastcomments = withAttribution(payload.msp_forecastcomments);
+      }
+
       const queue = getApprovalQueue();
       const op = queue.stage({
         type: 'create_milestone',
@@ -929,7 +1277,7 @@ export function registerTools(server, crmClient) {
         description: `Create milestone "${name}" on opportunity ${opportunityName || oppNid}`
       });
 
-      return text({
+      return stagedResponse({
         staged: true,
         operationId: op.id,
         description: op.description,
@@ -975,6 +1323,11 @@ export function registerTools(server, crmClient) {
         payload['ownerid@odata.bind'] = `/systemusers(${ownerNid})`;
       }
 
+      // AI attribution (RH-2) — only tag if the user provided a description
+      if (payload.description !== undefined) {
+        payload.description = withAttribution(payload.description);
+      }
+
       const queue = getApprovalQueue();
       const op = queue.stage({
         type: 'create_task',
@@ -984,7 +1337,7 @@ export function registerTools(server, crmClient) {
         beforeState: null,
         description: `Create task "${subject}" on milestone ${nid}`
       });
-      return text({
+      return stagedResponse({
         staged: true,
         operationId: op.id,
         description: op.description,
@@ -1024,6 +1377,9 @@ export function registerTools(server, crmClient) {
         query: { $select: Object.keys(payload).join(',') }
       });
 
+      // AI attribution (RH-2)
+      if (payload.description !== undefined) payload.description = withAttribution(payload.description);
+
       const queue = getApprovalQueue();
       const op = queue.stage({
         type: 'update_task',
@@ -1033,7 +1389,7 @@ export function registerTools(server, crmClient) {
         beforeState: before.ok ? before.data : null,
         description: `Update task ${nid}: ${Object.keys(payload).join(', ')}`
       });
-      return text({
+      return stagedResponse({
         staged: true,
         operationId: op.id,
         description: op.description,
@@ -1086,7 +1442,7 @@ export function registerTools(server, crmClient) {
       op.fallbackEntitySet = `tasks(${nid})/Microsoft.Dynamics.CRM.Close`;
       op.fallbackPayload = { Status: statusCode };
 
-      return text({
+      return stagedResponse({
         staged: true,
         operationId: op.id,
         description: op.description,
@@ -1137,7 +1493,7 @@ export function registerTools(server, crmClient) {
         if (resolved === undefined) return error(`Invalid milestoneStatus "${milestoneStatus}". Valid: ${MILESTONE_STATUSES.map(o => `${o.label} (${o.value})`).join(', ')}`);
         payload.msp_milestonestatus = resolved;
       }
-      if (forecastComments !== undefined) payload.msp_forecastcomments = forecastComments;
+      if (forecastComments !== undefined) payload.msp_forecastcomments = withAttribution(forecastComments);
       if (workloadType !== undefined) payload.msp_milestoneworkload = workloadType;
       if (deliveredBy !== undefined) payload.msp_deliveryspecifiedfield = deliveredBy;
       if (preferredAzureRegion !== undefined) payload.msp_milestonepreferredazureregion = preferredAzureRegion;
@@ -1252,7 +1608,7 @@ export function registerTools(server, crmClient) {
       // Attach identity for execution-time re-verification
       op.identity = identity;
 
-      return text({
+      return stagedResponse({
         staged: true,
         operationId: op.id,
         description: op.description,
@@ -1555,7 +1911,7 @@ export function registerTools(server, crmClient) {
         milestoneNumber: m.msp_milestonenumber,
         status: m['msp_milestonestatus@OData.Community.Display.V1.FormattedValue'] ?? m.msp_milestonestatus,
         commitment: commitmentLabel(m),
-        monthlyUse: m.msp_monthlyuse ?? null,
+        monthlyUse: formatCurrency(m.msp_monthlyuse),
         opportunityId: m._msp_opportunityid_value ?? null,
         opportunityName: opportunityNames[m._msp_opportunityid_value] ?? null,
         recordUrl: buildRecordUrl(base, 'msp_engagementmilestone', m.msp_engagementmilestoneid)
@@ -1622,7 +1978,7 @@ export function registerTools(server, crmClient) {
 
       const points = [...byMonth.entries()]
         .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([month, planned]) => ({ month, plannedMonthlyUse: planned }));
+        .map(([month, planned]) => ({ month, plannedMonthlyUse: planned, plannedMonthlyUseFormatted: formatCurrency(planned) }));
 
       const totalPlanned = points.reduce((sum, point) => sum + point.plannedMonthlyUse, 0);
       const consumedRecurring = Number(opportunity.msp_consumptionconsumedrecurring ?? 0);
@@ -1633,13 +1989,17 @@ export function registerTools(server, crmClient) {
           name: opportunity.name,
           estimatedCloseDate: toIsoDate(opportunity.estimatedclosedate),
           estimatedCompletionDate: toIsoDate(opportunity.msp_estcompletiondate),
-          consumedRecurring
+          consumedRecurring,
+          consumedRecurringFormatted: formatCurrency(consumedRecurring)
         },
         points,
         kpis: {
           consumedRecurring,
+          consumedRecurringFormatted: formatCurrency(consumedRecurring),
           totalPlannedMonthlyUse: totalPlanned,
-          latestPlannedMonthlyUse: points.length ? points[points.length - 1].plannedMonthlyUse : 0
+          totalPlannedMonthlyUseFormatted: formatCurrency(totalPlanned),
+          latestPlannedMonthlyUse: points.length ? points[points.length - 1].plannedMonthlyUse : 0,
+          latestPlannedMonthlyUseFormatted: points.length ? formatCurrency(points[points.length - 1].plannedMonthlyUse) : null
         },
         renderHints: {
           view: 'timeseries',
@@ -1862,10 +2222,21 @@ export function registerTools(server, crmClient) {
   server.tool(
     'execute_all',
     'Approve and execute ALL pending staged operations in sequence.',
-    {},
-    async () => {
+    {
+      confirmToken: z.string().describe(`Safety confirmation token. Must be exactly "${EXECUTE_ALL_CONFIRM_TOKEN}".`),
+      maxOperations: z.number().optional().describe('Optional cap on number of pending operations to execute (>=1).')
+    },
+    async ({ confirmToken, maxOperations }) => {
+      if (confirmToken !== EXECUTE_ALL_CONFIRM_TOKEN) {
+        return error(`execute_all requires confirmToken="${EXECUTE_ALL_CONFIRM_TOKEN}"`);
+      }
+      if (maxOperations !== undefined && (!Number.isInteger(maxOperations) || maxOperations < 1)) {
+        return error('maxOperations must be a positive integer when provided');
+      }
+
       const queue = getApprovalQueue();
-      const pending = queue.listPending();
+      let pending = queue.listPending();
+      if (maxOperations !== undefined) pending = pending.slice(0, maxOperations);
       if (!pending.length) return text({ executed: 0, message: 'No pending operations.' });
 
       const results = [];

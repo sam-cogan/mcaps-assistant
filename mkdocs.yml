@@ -56,6 +56,7 @@ plugins:
       separator: '[\s\-\.]+'
   - tags
   - glightbox
+  - mermaid-zoom
 
 markdown_extensions:
   - abbr
@@ -91,7 +92,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+          format: !!python/name:pymdownx.superfences.fence_div_format
   - pymdownx.tabbed:
       alternate_style: true
       combine_header_slug: true
@@ -109,6 +110,9 @@ extra:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
 
 nav:
   - Home: index.md
@@ -137,6 +141,7 @@ nav:
     - MCP Servers & Tools: architecture/mcp-servers.md
     - Skills & Instructions: architecture/skills-instructions.md
     - Safety & Write Operations: architecture/safety.md
+    - Threat Model: architecture/threat-model.md
   - Integrations:
     - integrations/index.md
     - Obsidian Vault (OIL): integrations/obsidian.md

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Cross-platform environment initializer for mcaps-copilot-tools.
+ * Cross-platform environment initializer for mcaps-iq.
  *
  * Usage:
  *   node scripts/init.js          # install + build all MCP servers

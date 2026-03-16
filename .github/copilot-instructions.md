@@ -21,6 +21,9 @@ At session start (or first account-team request), probe which mediums are querya
 | **CRM** | `crm_auth_status` or `crm_whoami` | No CRM reads/writes this session |
 | **Vault** | `get_vault_context()` via OIL (`oil` MCP) | Skip VAULT-PREFETCH; operate stateless |
 | **WorkIQ / M365** | `ask_work_iq` with a minimal scoped query | Communication gap detection limited |
+| **Teams** | `teams:ListTeams` (fast, low-payload probe) | No native Teams read/write; fall back to WorkIQ |
+| **Mail** | `mail:SearchMessages` with narrow KQL (`received:today`, `top: 1`) | No native mail read/write; fall back to WorkIQ |
+| **Calendar** | `calendar:ListCalendarView` with today's date range | No native calendar read/write; fall back to WorkIQ |
 | **Power BI** | `ExecuteQuery` with `EVALUATE TOPN(1, 'Dim_Calendar')` via `powerbi-remote` | Skip PBI steps; note data unavailable |
 
 Cache probe results for the session. Two-medium answers are acceptable; single-medium must flag the gap. Never fabricate cross-medium insights from a single source.
@@ -53,11 +56,17 @@ Cache probe results for the session. Two-medium answers are acceptable; single-m
 
 **WorkIQ**: Narrow scope before retrieval. See `.github/skills/workiq-query-scoping/SKILL.md`. Resolve role first, then apply scoping.
 
+**M365 Native Tools (Teams, Mail, Calendar)**: For targeted single-source operations (specific chat lookup, email search, scheduling), use native MCP tools instead of WorkIQ. Use WorkIQ for broad multi-source discovery. See:
+- `.github/skills/teams-query-scoping/SKILL.md` — chat discovery, message search, self-chat handling, channel navigation
+- `.github/skills/mail-query-scoping/SKILL.md` — KQL email search, thread navigation, attachment handling
+- `.github/skills/calendar-query-scoping/SKILL.md` — time-bounded event retrieval, scheduling, room booking
+- For tool selection rules → `.github/instructions/shared-patterns.instructions.md` § M365 Communication Layer
+
 **Vault (OIL)**: Knowledge store for customer context and durable memory. See `.github/instructions/obsidian-vault.instructions.md`. If unavailable, operate statelessly (CRM-only).
 
 **Connect Hooks**: Capture measurable impact evidence. See `.github/instructions/connect-hooks.instructions.md`.
 
-**Power BI**: Analytics medium for ACR telemetry, scorecards, and incentive baselines. See `.github/instructions/powerbi-mcp.instructions.md`. Prompts live in `.github/prompts/pbi-*.prompt.md`.
+**Power BI**: Analytics medium for ACR telemetry, scorecards, and incentive baselines. See `.github/instructions/powerbi-mcp.instructions.md`. Prompts live in `.github/prompts/pbi-*.prompt.md`. For prompt selection and multi-prompt orchestration, see `.github/skills/pbi-portfolio-navigator/SKILL.md`.
 
 ## Response Expectations
 

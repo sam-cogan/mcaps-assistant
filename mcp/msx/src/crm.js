@@ -182,6 +182,32 @@ export function createCrmClient(authService) {
     const allValues = [...first.data.value];
     let nextLink = first.data['@odata.nextLink'];
 
+    const paginationFailure = (status, message) => ({
+      ok: false,
+      status: status || 500,
+      data: {
+        message: `Pagination failed: ${message || 'Unknown error'}`,
+        partialCount: allValues.length,
+        partial: { ...first.data, value: allValues }
+      }
+    });
+
+    const fetchPage = async (link, token) => {
+      const resp = await fetchWithRetry(link, {
+        method: 'GET',
+        headers: getHeaders(token)
+      }, {
+        timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        retries: opts.retries ?? DEFAULT_RETRIES,
+        backoffMs: opts.backoffMs ?? DEFAULT_BACKOFF_MS
+      });
+      try {
+        return await resp.json();
+      } catch {
+        throw new Error('Invalid pagination response body');
+      }
+    };
+
     // Respect ceiling
     if (maxRecords > 0 && allValues.length >= maxRecords) {
       allValues.length = maxRecords;
@@ -190,39 +216,39 @@ export function createCrmClient(authService) {
 
     while (nextLink) {
       const authResult = await authService.ensureAuth();
-      if (!authResult.success) break;
+      if (!authResult.success) {
+        return paginationFailure(401, authResult.error || 'Authentication failed during pagination');
+      }
 
       const token = authService.getToken();
+      let page;
       try {
-        const resp = await fetch(nextLink, {
-          headers: getHeaders(token)
-        });
-        if (resp.status === 401) {
-          // Clear stale token and retry this page once
+        page = await fetchPage(nextLink, token);
+      } catch (err) {
+        if (err.status === 401) {
+          // Clear stale token and retry this page once with fresh auth
           authService.clearToken();
           const retryAuth = await authService.ensureAuth();
-          if (!retryAuth.success) break;
-          const retryResp = await fetch(nextLink, {
-            headers: getHeaders(authService.getToken())
-          });
-          if (!retryResp.ok) break;
-          const retryPage = await retryResp.json();
-          if (retryPage?.value) allValues.push(...retryPage.value);
-          nextLink = retryPage['@odata.nextLink'];
-          continue;
+          if (!retryAuth.success) {
+            return paginationFailure(401, retryAuth.error || 'Authentication failed during pagination retry');
+          }
+          try {
+            page = await fetchPage(nextLink, authService.getToken());
+          } catch (retryErr) {
+            return paginationFailure(retryErr.status || 500, retryErr.message || 'Unknown pagination error');
+          }
+        } else {
+          return paginationFailure(err.status || 500, err.message || 'Unknown pagination error');
         }
-        if (!resp.ok) break;
-        const page = await resp.json();
-        if (page?.value) allValues.push(...page.value);
-        // Enforce ceiling mid-pagination
-        if (maxRecords > 0 && allValues.length >= maxRecords) {
-          allValues.length = maxRecords;
-          return { ok: true, status: 200, data: { ...first.data, value: allValues, truncated: true } };
-        }
-        nextLink = page['@odata.nextLink'];
-      } catch {
-        break;
       }
+
+      if (page?.value) allValues.push(...page.value);
+      // Enforce ceiling mid-pagination
+      if (maxRecords > 0 && allValues.length >= maxRecords) {
+        allValues.length = maxRecords;
+        return { ok: true, status: 200, data: { ...first.data, value: allValues, truncated: true } };
+      }
+      nextLink = page['@odata.nextLink'];
     }
 
     return { ok: true, status: 200, data: { ...first.data, value: allValues } };
