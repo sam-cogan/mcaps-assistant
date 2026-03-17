@@ -54,8 +54,7 @@ theme:
 plugins:
   - search:
       separator: '[\s\-\.]+'
-  - tags:
-      tags_file: tags.md
+  - tags
   - glightbox
   - mermaid-zoom
 
