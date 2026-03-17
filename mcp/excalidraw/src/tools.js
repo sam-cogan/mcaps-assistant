@@ -7,7 +7,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { renderToSvg } from './renderer.js';
 
-const DRAWINGS_DIR = path.resolve(process.env.REPO_ROOT || '.', '.docs', 'Drawing_Excalidraw');
+const DRAWINGS_DIR = path.resolve(process.env.REPO_ROOT || '.', '.copilot', 'docs', 'excalidraw');
 
 function text(content) { return { content: [{ type: 'text', text: content }] }; }
 function error(msg) { return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true }; }
@@ -40,7 +40,7 @@ export function registerTools(server) {
   // ── create_drawing ──
   server.tool(
     'create_drawing',
-    'Create an Excalidraw diagram file. Validates the JSON structure and ensures elements are non-empty. Saves to .docs/Drawing_Excalidraw/.',
+    'Create an Excalidraw diagram file. Validates the JSON structure and ensures elements are non-empty. Saves to .copilot/docs/excalidraw/.',
     {
       filename: z.string().describe('Filename for the drawing (e.g. "Contoso_milestones.excalidraw"). Must end with .excalidraw'),
       document: z.string().describe('Complete Excalidraw JSON as a string. Must have type:"excalidraw", version:2, and a non-empty elements array.'),
@@ -89,7 +89,7 @@ export function registerTools(server) {
   // ── list_drawings ──
   server.tool(
     'list_drawings',
-    'List all Excalidraw diagram files in .docs/Drawing_Excalidraw/. Returns filenames, sizes, and element counts.',
+    'List all Excalidraw diagram files in .copilot/docs/excalidraw/. Returns filenames, sizes, and element counts.',
     {},
     async () => {
       try {
@@ -115,7 +115,7 @@ export function registerTools(server) {
         }
 
         if (drawings.length === 0) {
-          return text('No drawings found in .docs/Drawing_Excalidraw/');
+          return text('No drawings found in .copilot/docs/excalidraw/');
         }
 
         const lines = drawings.map(d =>

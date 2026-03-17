@@ -10,7 +10,7 @@ tools:
   - edit
   - write
   - apply_patch
-user-invocable: false
+
 ---
 # @pbi-analyst — Power BI Analysis Subagent
 

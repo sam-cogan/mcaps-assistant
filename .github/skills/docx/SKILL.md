@@ -44,6 +44,8 @@ pip install pypdf pdfplumber  # only if needed for PDF conversion steps
 
 A .docx file is a ZIP archive containing XML files.
 
+**Output directory**: Save generated `.docx` files to `.copilot/docs/` (see `shared-patterns.instructions.md` § Artifact Output Directory). Create the directory before writing.
+
 ## Quick Reference
 
 | Task | Approach |

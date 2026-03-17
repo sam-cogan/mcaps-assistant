@@ -22,6 +22,7 @@ Routes user queries about Power BI reports to the correct pre-configured `pbi-*.
 | ID | Aliases | Prompt File | Semantic Model | Answers |
 |----|---------|-------------|----------------|---------|
 | `aio` | azure all in one, all-in-one, AIO, portfolio review, gap to target, azure consumption, enterprise consumption | `pbi-azure-all-in-one-review.prompt.md` | MSA_AzureConsumption_Enterprise | Gap to target, pipeline conversion ranking, recommended actions |
+| `subacr` | subscription details, subscription analysis, acr by subscription, subscription guid acr, subscription name acr, customer subscription acr, subscription consumption | `pbi-azure-subscription-acr-consumption.prompt.md` | MSA_Azure_SubscriptionDetails_Enterprise | Subscription-level ACR lookup by GUID/name/customer with month trend and service drivers |
 | `sl5` | service deep dive, SL5, ACR by service, service-level, consumption by service, which services growing | `pbi-azure-service-deep-dive-sl5-aio.prompt.md` | MSA_AzureConsumption_Enterprise + WWBI_ACRSL5 | Service growth/decline trends, attainment by pillar, service-level gap actions |
 | `cmi` | customer incidents, outages, CMI, CritSit, escalations, incident review, reactive support, AA&MSXI | `pbi-customer-incident-review.prompt.md` | AA&MSXI (CMI) | Active incidents, escalations, outage trends, reactive support health |
 | `ghcp` | GHCP, new logo, new logo incentive, growth incentive, GHCP new logo | `pbi-ghcp-new-logo-incentive.prompt.md` | MSXI (DIM_GHCP_Initiative) | Account eligibility, qualifying status, realized ACR against thresholds |
@@ -35,6 +36,7 @@ Extract the user's intent and compare against the **Aliases** column above. Matc
 1. **Exact alias match** → route immediately.
 2. **Question-based match** — map the user's data question to the **Answers** column:
    - "What is my gap?" → `aio`
+   - "Get ACR for this subscription/customer/GUID" → `subacr`
    - "Show me incidents for Contoso" → `cmi`
    - "Which services are growing?" → `sl5`
    - "Am I qualifying for the growth incentive?" → `ghcp`
@@ -50,15 +52,16 @@ If no alias or question matches, present the full catalog:
 > | # | Report | What It Answers |
 > |---|--------|-----------------|
 > | 1 | **Azure All-in-One** — portfolio gap, pipeline ranking, actions | `aio` |
-> | 2 | **Service Deep Dive (SL5)** — service-level consumption trends | `sl5` |
-> | 3 | **Customer Incidents (CMI)** — outages, CritSits, reactive support | `cmi` |
-> | 4 | **GHCP New Logo Incentive** — account eligibility & qualifying status | `ghcp` |
-> | 5 | **None of these** — help me build a new one |
+> | 2 | **Subscription ACR Lookup** — subscription/customer/GUID consumption detail | `subacr` |
+> | 3 | **Service Deep Dive (SL5)** — service-level consumption trends | `sl5` |
+> | 4 | **Customer Incidents (CMI)** — outages, CritSits, reactive support | `cmi` |
+> | 5 | **GHCP New Logo Incentive** — account eligibility & qualifying status | `ghcp` |
+> | 6 | **None of these** — help me build a new one |
 >
 > Which one are you looking for? (pick a number or describe your question)
 
-- If user picks 1–4 → route to the prompt.
-- If user picks 5 or describes something not in the catalog → chain to `pbi-prompt-builder` skill.
+- If user picks 1–5 → route to the prompt.
+- If user picks 6 or describes something not in the catalog → chain to `pbi-prompt-builder` skill.
 
 ### Step 3 — Execute the Prompt
 

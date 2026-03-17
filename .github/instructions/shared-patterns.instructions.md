@@ -130,6 +130,23 @@ Detailed formatting, classification, and schema rules are centralized in `.githu
 - Risk findings always include: one-sentence risk, evidence source, role to act, minimum intervention.
 - `connect_hook_hint` (optional): pre-classified Connects impact area(s) and one-line hook template for passive evidence capture.
 
+### Artifact Output Directory (Mandatory)
+
+All generated file artifacts MUST be saved under `.copilot/docs/` in the workspace root. This directory is gitignored and serves as the single collection point for agent-produced documents.
+
+| Artifact type | Default path |
+|---|---|
+| PDF | `.copilot/docs/<name>.pdf` |
+| Word (.docx) | `.copilot/docs/<name>.docx` |
+| Excel (.xlsx) | `.copilot/docs/<name>.xlsx` |
+| PowerPoint (.pptx) | `.copilot/docs/<name>.pptx` |
+| Excalidraw | `.copilot/docs/excalidraw/<name>.excalidraw` |
+| Other documents | `.copilot/docs/<name>.<ext>` |
+
+- Create `.copilot/docs/` (and subdirectories) automatically before writing — use `mkdir -p` or equivalent.
+- If the user provides an explicit output path, honor it instead.
+- Use descriptive filenames: `<customer>-<artifact>-<date>.<ext>` (e.g. `contoso-pricing-model-2026-03-16.xlsx`).
+
 ### CRM Record Linkification (Mandatory)
 
 Always link CRM records in output: `https://microsoftsales.crm.dynamics.com/main.aspx?etn=<entityLogicalName>&id=<GUID>&pagetype=entityrecord`. Entity types: `opportunity`, `msp_engagementmilestone` (GUID from `id`), `task` (GUID from `activityid`). Use `recordUrl` from tool output when available. Format as `[Record Name](url)` in tables and confirmation packets.

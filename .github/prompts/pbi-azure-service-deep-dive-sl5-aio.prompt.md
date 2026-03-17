@@ -559,6 +559,8 @@ ORDER BY [Pipe_All] DESC
 
 For propensity cross-referencing:
 
+> **Important**: `AzureCustomerAttributes` does NOT have a `TPAccountName` column. Filter by TPID only.
+
 ```dax
 EVALUATE
 CALCULATETABLE(
@@ -573,7 +575,7 @@ CALCULATETABLE(
         "500K_100K_Target", 'AzureCustomerAttributes'[500K_100K_Targets],
         "TrancheGrowthTarget", 'AzureCustomerAttributes'[TrancheGrowthTargetAccounts]
     ),
-    <ACCOUNT_FILTER>
+    'AzureCustomerAttributes'[TPID] IN {<TPID_LIST>}
 )
 ```
 
