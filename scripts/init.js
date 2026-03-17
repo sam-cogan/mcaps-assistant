@@ -40,6 +40,13 @@ const SERVERS = [
     build: "npm run build",
     verify: "dist/index.js",
   },
+  {
+    name: "excalidraw",
+    dir: join(ROOT, "mcp", "excalidraw"),
+    install: "npm install",
+    build: null, // plain JS — no build step
+    verify: "src/index.js",
+  },
 ];
 
 // ── prerequisite checks ─────────────────────────────────────────────

@@ -1,0 +1,3 @@
+#!/bin/sh
+#echo "⛔ Push blocked — manual push only. Run: git push --no-verify"
+#exit 1
