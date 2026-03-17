@@ -18,6 +18,54 @@ const TRACES_DIR = resolve(import.meta.dirname);
 const GOLDEN_DIR = join(TRACES_DIR, "golden");
 const CAPTURED_DIR = join(TRACES_DIR, "captured");
 
+// ── Schema version from actual MOCK_TOOLS ───────────────────────────────────
+
+/**
+ * Compute a deterministic hash of the MOCK_TOOLS schema.
+ * Reads tool names from the live-harness MOCK_TOOLS export when available,
+ * falls back to extracting names from the source file.
+ */
+export function computeSchemaVersion(): string {
+  let toolNames: string[];
+
+  try {
+    // Try reading live-harness.ts source to extract tool names
+    // (avoids circular import issues when used from both CLI and test contexts)
+    const harnessPath = join(resolve(import.meta.dirname, "../live"), "live-harness.ts");
+    const content = readFileSync(harnessPath, "utf-8");
+    toolNames = [];
+    const nameRe = /name:\s*"([^"]+)"/g;
+    let match;
+    while ((match = nameRe.exec(content)) !== null) {
+      if (match[1].includes("__")) {
+        toolNames.push(match[1]);
+      }
+    }
+  } catch {
+    // Fallback: hardcoded list if source file not accessible
+    toolNames = [
+      "msx_crm__crm_whoami", "msx_crm__crm_auth_status",
+      "msx_crm__get_my_active_opportunities", "msx_crm__get_milestones",
+      "msx_crm__crm_query", "msx_crm__update_milestone",
+      "msx_crm__create_task", "msx_crm__get_milestone_activities",
+      "msx_crm__get_milestone_field_options", "msx_crm__get_task_status_options",
+      "msx_crm__crm_get_record", "msx_crm__list_opportunities",
+      "msx_crm__find_milestones_needing_tasks",
+      "msx_crm__execute_operation", "msx_crm__execute_all",
+      "msx_crm__list_pending_operations", "msx_crm__create_milestone",
+      "msx_crm__update_task", "msx_crm__close_task",
+      "msx_crm__manage_deal_team", "msx_crm__manage_milestone_team",
+      "oil__get_vault_context", "oil__get_customer_context",
+      "oil__search_vault", "oil__read_note", "oil__write_note",
+      "oil__query_notes", "oil__query_graph", "oil__patch_note",
+      "oil__promote_findings", "oil__draft_meeting_note", "oil__apply_tags",
+      "workiq__ask_work_iq",
+    ];
+  }
+
+  return createHash("sha256").update(toolNames.sort().join(",")).digest("hex").slice(0, 12);
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -174,35 +222,6 @@ function runRegression(): void {
   }
 
   console.log(`\n✅ All golden traces are current.`);
-}
-
-/**
- * Compute a hash of the MOCK_TOOLS schema version.
- * This is a simplified version — in production, hash the actual tool definitions.
- */
-export function computeSchemaVersion(): string {
-  // Use a hash of the current date's month as a simple version stamp.
-  // Real implementation would hash MOCK_TOOLS from live-harness.ts.
-  const toolNames = [
-    "msx-crm:crm_whoami", "msx-crm:crm_auth_status",
-    "msx-crm:get_my_active_opportunities", "msx-crm:get_milestones",
-    "msx-crm:crm_query", "msx-crm:update_milestone",
-    "msx-crm:create_task", "msx-crm:get_milestone_activities",
-    "msx-crm:get_milestone_field_options", "msx-crm:get_task_status_options",
-    "msx-crm:crm_get_record", "msx-crm:list_opportunities",
-    "msx-crm:find_milestones_needing_tasks",
-    "msx-crm:execute_operation", "msx-crm:execute_all",
-    "msx-crm:list_pending_operations", "msx-crm:create_milestone",
-    "msx-crm:update_task", "msx-crm:close_task",
-    "msx-crm:manage_deal_team", "msx-crm:manage_milestone_team",
-    "oil:get_vault_context", "oil:get_customer_context",
-    "oil:search_vault", "oil:read_note", "oil:write_note",
-    "oil:query_notes", "oil:query_graph", "oil:patch_note",
-    "oil:promote_findings", "oil:draft_meeting_note", "oil:apply_tags",
-    "workiq:ask_work_iq",
-  ].sort();
-
-  return createHash("sha256").update(toolNames.join(",")).digest("hex").slice(0, 12);
 }
 
 // ── Trace creation helper (used by live harness) ────────────────────────────

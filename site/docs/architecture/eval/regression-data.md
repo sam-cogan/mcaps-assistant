@@ -1,43 +1,52 @@
+---
+title: Regression & Test Data
+description: Score persistence, baseline workflow, synthetic fixture generators, golden traces, and capture pipeline.
+tags:
+  - evaluation
+  - regression
+  - test-data
+---
+
 # Eval Regression Tracking & Test Data Strategy — Spec
 
-> **Status**: Draft  
+> **Status**: Implemented  
 > **Date**: 2026-03-16  
-> **Parent**: [eval-framework-spec.md](eval-framework-spec.md), [eval-hardening-spec.md](eval-hardening-spec.md)  
-> **Scope**: Two problems: (1) eval scores are computed and discarded — no trend visibility, no regression detection; (2) production CRM/M365 is the only live data source — no safe way to test with realistic data at scale.
+> **Parent**: [Design Spec](design-spec.md), [Hardening](hardening.md)  
+> **Scope**: Two problems, both addressed: (1) eval scores are now persisted with regression detection; (2) synthetic fixture generators eliminate production CRM dependency for behavioral testing.
 
 ---
 
 ## 1. Problem Statement
 
-### 1.1 Regression Tracking
+### 1.1 Regression Tracking — ✅ Resolved
 
-Today, `npm run eval` and `npm run eval:live` log scores to stdout and throw them away. There is no mechanism to:
+Previously, `npm run eval` logged scores to stdout and discarded them. Now:
 
-- Compare scores between commits/PRs
-- Detect when a skill edit degrades an unrelated skill
-- Track score trends across model changes (gpt-4o-mini → gpt-4.1)
-- Set pass/fail gates in CI based on score delta vs. baseline
-- Audit what changed when a regression is detected
+- **Score persistence**: Custom Vitest reporter (`json-persist.ts`) writes `latest.json` + `history/{timestamp}.json` after every run
+- **Baseline comparison**: `baseline.json` committed to repo; `npm run eval:diff` detects regressions
+- **Trend visibility**: `npm run eval:history` shows score trends from archived runs
+- **Git metadata**: Each result includes commit hash and branch name
+- **Phase detection**: Reporter automatically classifies runs as offline/live/both
 
-The `report.ts` aggregator produces Markdown but nothing persists it. The hardening spec (WS-3) mentions a CI workflow but stops at "run the tests" — it doesn't address what happens to the results.
+Current baseline: **92.9% overall** (7 scenarios: 5 pass, 2 review). Latest live: **94.0%** (5 scenarios).
 
-### 1.2 Test Data
+### 1.2 Test Data — ✅ Resolved (Options A + C implemented)
 
-Production Dynamics 365 is the only CRM instance. Consequences:
+Production Dynamics 365 is no longer the only data source:
 
-- `capture-fixtures.js` hits live customer data (PII risk even with `--redact`)
-- Fixtures reflect one user's pipeline — no way to test multi-role scenarios (SE vs. CSAM vs. Specialist on same account)
-- No way to control data shape: can't create an "overdue milestone" or "stale opportunity" on demand
-- Coverage gaps: no M365 real captures, OIL fixtures depend on local vault state
-- Fixture staleness: captures age out as live data changes, but evals keep passing on stale snapshots
+- **Synthetic generators** (Option A): `CrmFixtureFactory` (5 presets), `OilFixtureFactory` (2 presets), `M365FixtureFactory` (2 presets) provide full control over data shape
+- **Schema guard**: `schema-guard.ts` validates synthetic fixtures against CRM entity schemas
+- **Golden traces** (Option C): Infrastructure complete — `trace-harness.ts` with capture/promote/regression workflow
+- **Capture pipeline**: `capture-fixtures.js` (828 lines) with `scrub-map.json` for PII redaction + entity renaming
+- **Factory-backed mocks**: All three mock servers accept `loadFromFactory()` alongside disk fixtures
 
 ---
 
 ## 2. Regression Tracking
 
-### 2.1 Score Persistence Format
+### 2.1 Score Persistence Format — ✅ Implemented
 
-After each eval run, write a JSON results file to `evals/results/`:
+After each eval run, the `json-persist.ts` reporter writes a JSON results file to `evals/results/`:
 
 ```
 evals/results/
@@ -93,12 +102,12 @@ interface EvalRunResult {
 }
 ```
 
-### 2.2 Baseline Workflow
+### 2.2 Baseline Workflow — ✅ Implemented
 
-1. **Establish baseline**: `npm run eval:baseline` — runs Phase 1 + Phase 2, writes `evals/results/baseline.json`, committed to repo.
+1. **Establish baseline**: `npm run eval:baseline` — runs Phase 1, writes `evals/results/baseline.json`, committed to repo.
 2. **Regular runs**: `npm run eval` writes `evals/results/latest.json` (gitignored). Also appends to `evals/results/history/`.
 3. **Regression check**: `npm run eval:diff` — compares `latest.json` vs. `baseline.json`, outputs delta report.
-4. **Update baseline**: After intentional changes, `npm run eval:baseline --update` overwrites baseline and commits.
+4. **Update baseline**: After intentional changes, `npm run eval:baseline` overwrites baseline.
 
 #### Diff Report Output
 
@@ -154,17 +163,28 @@ Extend the CI workflow from the hardening spec (WS-3 §5.5):
       });
 ```
 
-### 2.4 npm Scripts
+### 2.4 npm Scripts — ✅ Implemented
+
+All scripts are in `package.json`:
 
 ```jsonc
 {
-  "eval:baseline": "vitest run --config vitest.config.ts && node scripts/eval-persist.js --baseline",
+  "eval": "vitest run --config vitest.config.ts",
+  "eval:watch": "vitest --config vitest.config.ts",
+  "eval:live": "vitest run --config vitest.live.config.ts",
+  "eval:live:watch": "vitest --config vitest.live.config.ts",
+  "eval:all": "vitest run --config vitest.config.ts && vitest run --config vitest.live.config.ts",
+  "eval:baseline": "vitest run --config vitest.config.ts && node scripts/eval-persist.js --baseline --update",
   "eval:diff": "node scripts/eval-persist.js --diff",
-  "eval:history": "node scripts/eval-persist.js --history"
+  "eval:history": "node scripts/eval-persist.js --history",
+  "eval:trace": "npx tsx evals/traces/trace-harness.ts",
+  "fixtures:capture": "node scripts/capture-fixtures.js",
+  "fixtures:capture:dry": "node scripts/capture-fixtures.js --dry-run",
+  "fixtures:capture:redact": "node scripts/capture-fixtures.js --redact"
 }
 ```
 
-### 2.5 Implementation: `scripts/eval-persist.js`
+### 2.5 Implementation: `scripts/eval-persist.js` — ✅ Implemented (256 lines)
 
 Single script, three modes:
 
@@ -177,60 +197,38 @@ Single script, three modes:
 
 The script reads from `evals/results/latest.json` (written by a Vitest reporter — see §2.6).
 
-### 2.6 Vitest Custom Reporter
+### 2.6 Vitest Custom Reporter — ✅ Implemented (172 lines)
 
-Instead of a post-run script, wire persistence directly into the test runner:
+Persistence is wired directly into the test runner via `evals/reporters/json-persist.ts`. Configured in both `vitest.config.ts` and `vitest.live.config.ts` as:
 
 ```typescript
-// evals/reporters/json-persist.ts
-import type { Reporter } from "vitest";
-import { writeFileSync, mkdirSync } from "node:fs";
-import { execSync } from "node:child_process";
-import { join } from "node:path";
-
-const RESULTS_DIR = join(import.meta.dirname, "../results");
-const HISTORY_DIR = join(RESULTS_DIR, "history");
-
-export default class EvalPersistReporter implements Reporter {
-  onFinished(files, errors) {
-    mkdirSync(HISTORY_DIR, { recursive: true });
-
-    // Collect results from Vitest's test metadata
-    // (eval tests attach scores via test.meta — see §2.7)
-    const result: EvalRunResult = {
-      timestamp: new Date().toISOString(),
-      commit: execSync("git rev-parse --short HEAD").toString().trim(),
-      branch: execSync("git branch --show-current").toString().trim(),
-      // ... assemble from test metadata
-    };
-
-    const latest = join(RESULTS_DIR, "latest.json");
-    const history = join(HISTORY_DIR, `${result.timestamp.replace(/:/g, "-")}.json`);
-
-    writeFileSync(latest, JSON.stringify(result, null, 2));
-    writeFileSync(history, JSON.stringify(result, null, 2));
-  }
-}
+reporters: ["verbose", "./evals/reporters/json-persist.ts"]
 ```
 
-### 2.7 Test Metadata Attachment
+The reporter implements the `Reporter` interface using the `onTestRunEnd(testModules)` hook. It recursively collects `TestCase` instances, reads attached metadata, computes per-scenario aggregates, and writes results with git commit/branch.
 
-Each eval test attaches its score to Vitest's test context so the reporter can collect it:
+### 2.7 Test Metadata Attachment — ✅ Implemented
+
+Each eval test attaches its score via the `attachEvalMeta()` helper from `harness.ts`:
 
 ```typescript
 // Example: tool-calls.eval.ts
-it("calls auth, vault, then scoped milestones in order", ({ meta }) => {
-  // ... existing test logic ...
+it("calls auth, vault, then scoped milestones in order", ({ task }) => {
+  // ... test logic ...
   const result = judgeToolSequence(recorder.calls, expected);
 
-  // Attach score for the reporter
-  meta.evalScore = result.score;
-  meta.evalDimension = "toolCorrectness";
-  meta.evalScenarioId = "milestone-health-scoped";
+  attachEvalMeta(task, {
+    scenarioId: "milestone-health-scoped",
+    dimension: "toolCorrectness",
+    score: result.score,
+    pass: result.pass,
+  });
 
   expect(result.pass).toBe(true);
 });
 ```
+
+The reporter reads `task.meta.evalScenarioId`, `evalDimension`, `evalScore`, `evalPass`, and `evalViolations`.
 
 ---
 
@@ -238,9 +236,9 @@ it("calls auth, vault, then scoped milestones in order", ({ meta }) => {
 
 Production CRM is the only data source. Here are four options, ordered from least to most effort. They are **not mutually exclusive** — the recommended approach combines Options A + C for immediate value, then adds D when eval coverage demands grow.
 
-### Option A: Synthetic Fixture Generator (Recommended — start here)
+### Option A: Synthetic Fixture Generator — ✅ Implemented
 
-**Idea**: Instead of capturing live data, generate fixture JSON programmatically with controlled data shapes. Each scenario defines the data conditions it needs.
+**Idea**: Generate fixture JSON programmatically with controlled data shapes. Each scenario defines the data conditions it needs.
 
 **Effort**: Low — one utility file, no infrastructure.
 
@@ -427,9 +425,9 @@ This gives a cheap way to detect when CRM adds new fields or changes types witho
 
 ---
 
-### Option B: Capture-and-Scrub (Current Model, Improved)
+### Option B: Capture-and-Scrub — ✅ Implemented
 
-**Idea**: Keep `capture-fixtures.js` but improve the scrubbing pipeline from the hardening spec (WS-2 §4.3) so captured data is safe to commit.
+**Idea**: `capture-fixtures.js` (828 lines) with improved scrubbing via `scrub-map.json` for safe fixture use.
 
 **Effort**: Low-Medium — extend existing `--redact` flag.
 
@@ -457,9 +455,9 @@ Capture-and-scrub is the right choice for **integration smoke tests** — verify
 
 ---
 
-### Option C: Scenario Composition from Golden Traces (Recommended — pair with A)
+### Option C: Scenario Composition from Golden Traces — ✅ Infrastructure Implemented
 
-**Idea**: Record tool-call traces from real agent sessions (via the agent's existing recorder infrastructure), then replay them as "golden traces" for regression testing. This bridges the gap between synthetic fixtures (controlled but disconnected from real behavior) and live captures (realistic but uncontrolled).
+**Idea**: Record tool-call traces from real agent sessions, then replay them as "golden traces" for regression testing. Infrastructure is complete; no golden traces have been promoted yet.
 
 **Effort**: Low-Medium — add a trace export command, replay harness.
 
@@ -557,9 +555,9 @@ This is not an exact-match comparison — it allows the agent to improve while c
 
 ---
 
-### Option D: Sandbox CRM Instance
+### Option D: Sandbox CRM Instance — Not Pursued
 
-**Idea**: Provision a Dynamics 365 sandbox environment with controlled seed data. Run live evals against real CRM APIs with known data.
+**Idea**: Provision a Dynamics 365 sandbox environment with controlled seed data. Not yet needed — Options A + C cover current requirements.
 
 **Effort**: High — requires D365 sandbox provisioning, seed data scripts, org buy-in.
 
@@ -606,77 +604,86 @@ Only when:
 
 ---
 
-## 4. Recommendation
+## 4. Recommendation — Implementation Status
 
-### Immediate (this sprint)
+### Immediate (this sprint) — ✅ Done
 
-| Action | Option | Effort |
+| Action | Option | Status |
 |--------|--------|--------|
-| Add `eval-persist.js` + Vitest reporter for score persistence | §2 | 1 day |
-| Add `eval:baseline` / `eval:diff` npm scripts | §2 | 0.5 day |
-| Create `CrmFixtureFactory` + 4 scenario presets | A | 1 day |
-| Wire YAML scenarios to use factory-generated fixtures | A | 0.5 day |
-| Add `.gitignore` entries for `evals/results/latest.json`, `history/` | §2 | trivial |
-| Commit initial `baseline.json` | §2 | trivial |
+| Add `eval-persist.js` + Vitest reporter for score persistence | §2 | ✅ 256 + 172 lines |
+| Add `eval:baseline` / `eval:diff` npm scripts | §2 | ✅ In package.json |
+| Create `CrmFixtureFactory` + 5 scenario presets | A | ✅ 367 lines |
+| Wire YAML scenarios to use factory-generated fixtures | A | ✅ tool-calls.eval.ts |
+| Add `.gitignore` entries | §2 | ✅ |
+| Commit initial `baseline.json` | §2 | ✅ 92.9%, 7 scenarios |
 
-### Next sprint
+### Next sprint — ✅ Done
 
-| Action | Option | Effort |
+| Action | Option | Status |
 |--------|--------|--------|
-| Add trace capture to live eval harness | C | 1 day |
-| Record 5 golden traces (one per live scenario) | C | 0.5 day |
-| Add `eval:trace --regression` command | C | 1 day |
-| PR comment workflow (CI integration §2.3) | §2 | 0.5 day |
-| Schema-only capture mode for drift detection | A | 0.5 day |
+| Add trace capture to live eval harness | C | ✅ `--capture-trace` flag |
+| Trace infrastructure (types + harness + golden dir) | C | ✅ 293 + 53 lines |
+| Schema guard for drift detection | A | ✅ 211 lines |
+| `sync-mock-tools.js` for MOCK_TOOLS parity | WS-2 | ✅ 277 lines |
 
-### Later (if needed)
+### Remaining
 
-| Action | Option | Effort |
+| Action | Option | Status |
 |--------|--------|--------|
-| D365 sandbox provisioning + seed scripts | D | multi-week |
-| M365 mock expansion (real mail/calendar captures) | B | 1 day |
-| Multi-model regression matrix (run golden traces on 3+ models) | C | 1 day |
+| Promote 5 golden traces (one per live scenario) | C | ⚠️ Golden dir empty |
+| PR comment CI workflow | §2 | ⚠️ Spec ready, not deployed |
+| D365 sandbox provisioning | D | Not needed yet |
+| Multi-model regression matrix | C | Infrastructure ready |
 
 ---
 
-## 5. File Changes Summary
+## 5. File Changes Summary — Actual State
 
-### New Files
+### Implemented Files
 
-| File | Purpose |
-|------|---------|
-| `scripts/eval-persist.js` | Score persistence, diff, history |
-| `evals/reporters/json-persist.ts` | Vitest custom reporter |
-| `evals/fixtures/generators/crm-factory.ts` | Synthetic CRM fixture builder |
-| `evals/fixtures/generators/oil-factory.ts` | Synthetic vault fixture builder |
-| `evals/fixtures/generators/m365-factory.ts` | Synthetic M365 fixture builder |
-| `evals/fixtures/generators/schema-guard.ts` | Shape validation against live schemas |
-| `evals/results/baseline.json` | Committed baseline scores |
-| `evals/traces/README.md` | Trace format documentation |
+| File | Lines | Purpose |
+|------|------:|--------|
+| `scripts/eval-persist.js` | 256 | Score persistence, diff, history |
+| `evals/reporters/json-persist.ts` | 172 | Vitest custom reporter |
+| `evals/fixtures/generators/crm-factory.ts` | 367 | Synthetic CRM fixture builder (5 presets) |
+| `evals/fixtures/generators/oil-factory.ts` | 131 | Synthetic vault fixture builder (2 presets) |
+| `evals/fixtures/generators/m365-factory.ts` | 105 | Synthetic M365 fixture builder (2 presets) |
+| `evals/fixtures/generators/schema-guard.ts` | 211 | Shape validation against CRM schemas |
+| `evals/fixtures/generators/index.ts` | 19 | Barrel exports |
+| `evals/results/baseline.json` | 99 | Committed baseline (92.9%, 7 scenarios) |
+| `evals/traces/README.md` | 80 | Trace format documentation |
+| `evals/traces/types.ts` | 53 | AgentTrace interface |
+| `evals/traces/trace-harness.ts` | 293 | Capture/promote/regression CLI |
+| `scripts/sync-mock-tools.js` | 277 | MOCK_TOOLS auto-sync from MCP schemas |
+| `scripts/capture-fixtures.js` | 828 | Live fixture capture with PII scrubbing |
+| `evals/fixtures/scrub-map.json` | — | Customer/user name redaction mapping |
 
 ### Modified Files
 
 | File | Change |
 |------|--------|
-| `package.json` | Add `eval:baseline`, `eval:diff`, `eval:history`, `eval:trace` scripts |
-| `vitest.config.ts` | Add `json-persist` reporter |
-| `.gitignore` | Add `evals/results/latest.json`, `evals/results/history/`, `evals/traces/captured/` |
-| `evals/harness.ts` | Accept factory-generated fixtures; export `attachEvalMeta()` helper |
-| `evals/tool-correctness/tool-calls.eval.ts` | Bind scenarios to factory presets instead of manual `crm.handle()` choreography |
-| `evals/live/live-harness.ts` | Add `--capture-trace` flag; export trace in `AgentTrace` format |
-
-### Unchanged
-
-Existing judges, anti-pattern rules, and live scenarios require no changes — they consume fixture data and tool-call traces, both of which are enhanced but not restructured.
+| `package.json` | Added 12 eval-related npm scripts |
+| `vitest.config.ts` | Added `json-persist` reporter |
+| `vitest.live.config.ts` | Added `json-persist` reporter, `.env` loading |
+| `.gitignore` | Added eval results, history, traces, generated, fixture dirs |
+| `evals/harness.ts` | Factory support (`loadFromFactory`), `attachEvalMeta()`, `checkFixtureFreshness()` |
+| `evals/judges/anti-pattern.ts` | Severity weights, context param, scope-group AP-003 |
+| `evals/judges/tool-sequence.ts` | Best-match (params-aware) instead of first-match |
+| `evals/judges/output-format.ts` | Header-only column detection |
+| `evals/judges/llm-judge.ts` | Raised thresholds, exponential backoff retry |
+| `evals/tool-correctness/tool-calls.eval.ts` | Factory-bound scenarios, metadata attachment |
+| `evals/live/live-harness.ts` | 32 MOCK_TOOLS, trace capture, YAML scenario loading |
+| `evals/live/live-agent.eval.ts` | Write safety: no `execute_*` + staged count check |
+| `evals/context-budget/context-budget.eval.ts` | Hard fail limits (6K/8K/40%) |
 
 ---
 
-## 6. Open Questions
+## 6. Open Questions — Resolved
 
-1. **Baseline granularity**: One baseline per model, or one shared baseline? If live evals use different models, scores aren't comparable. Recommendation: baseline includes model metadata; `eval:diff` matches on model name, warns on mismatch.
+1. **Baseline granularity**: ✅ Resolved — Results include model metadata; `eval:diff` matches on phase, warns on model mismatch.
 
-2. **Golden trace expiry**: When do golden traces become stale? Recommendation: traces carry a schema version stamp; mark stale when tool schemas change (detected by `sync-mock-tools.js` from hardening spec WS-2 §4.1).
+2. **Golden trace expiry**: ✅ Resolved — Traces carry schema version stamps (SHA-256 hash of MOCK_TOOLS array). `trace-harness.ts` detects staleness when tool schemas change.
 
-3. **History retention**: How many historical runs to keep? Recommendation: keep last 30 (or 30 days), prune oldest on each run.
+3. **History retention**: ✅ Resolved — All runs archived in `results/history/`. Pruning policy: manual cleanup as needed.
 
-4. **PR scoring**: Should eval scores block merge? Recommendation: start with "comment only" mode; graduate to blocking after 2 weeks of stable baselines.
+4. **PR scoring**: Spec ready for "comment only" mode via GitHub Actions workflow. Not yet deployed to CI.

@@ -38,6 +38,43 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Check for regressions
+        if: always()
+        run: node scripts/eval-persist.js --diff --fail-on-regression --threshold 5
+        continue-on-error: false
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.sha }}
+          path: evals/results/latest.json
+
+      - name: Comment PR with eval summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'evals/results/latest.json';
+            if (!fs.existsSync(path)) return;
+            const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const s = data.summary;
+            const emoji = s.level === 'pass' ? '🟢' : s.level === 'review' ? '🟡' : '🔴';
+            const body = [
+              `## ${emoji} Eval Results`,
+              '',
+              `**Overall**: ${(s.overallScore * 100).toFixed(1)}% (${s.level})`,
+              `**Scenarios**: ${s.scenarioCount} total — ${s.passed} passed, ${s.review} review, ${s.failed} failed`,
+              `**Commit**: \`${data.commit}\` | **Phase**: ${data.phase}`,
+            ].join('\n');
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
   eval-live:
     name: Phase 2 — Live Agent Evals
     runs-on: ubuntu-latest

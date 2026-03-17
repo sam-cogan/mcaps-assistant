@@ -102,7 +102,7 @@ export async function createAzureClient(config: LiveEvalConfig): Promise<OpenAI>
 
 // ── Tool definitions for function calling ───────────────────────────────────
 
-const MOCK_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+export const MOCK_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   // CRM tools
   {
     type: "function",

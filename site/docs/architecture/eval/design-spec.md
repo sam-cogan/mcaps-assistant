@@ -1,8 +1,19 @@
+---
+title: Design Spec
+description: What we evaluate, scenario design, scoring model, and implementation phases.
+tags:
+  - evaluation
+  - design
+  - testing
+---
+
 # Prompt & Skill Evaluation Framework — Design Spec
 
-> **Status**: Draft  
+> **Status**: Implemented (Phase 1 + Phase 2 + Phase 3)  
 > **Date**: 2026-03-16  
-> **Scope**: Evaluates the 14 instruction files, ~39 skills, and tool-calling patterns that guide the MCAPS-IQ agent.
+> **Last verified**: Baseline 92.9% (offline), 94.0% (live)  
+> **Scope**: Evaluates the 14 instruction files, ~39 skills, and tool-calling patterns that guide the MCAPS-IQ agent.  
+> **See also**: [Architecture](architecture.md) (implementation details), [Hardening](hardening.md) (hardening), [Regression & Test Data](regression-data.md) (regression & test data).
 
 ---
 
@@ -98,144 +109,163 @@ Extending the OIL bench token-efficiency pattern:
 
 ## 4. Architecture
 
+See [Architecture](architecture.md) for full implementation details including source file inventory, class diagrams, and data flow.
+
 ```
 evals/
-├── fixtures/                    # Synthetic test data
-│   ├── crm-responses/          # Mocked CRM API responses
-│   │   ├── whoami.json
-│   │   ├── opportunities-contoso.json
-│   │   ├── milestones-active.json
-│   │   └── ...
-│   ├── vault/                  # → symlink or copy of oil/bench/fixtures/vault
-│   ├── m365-responses/         # Mocked WorkIQ/Calendar/Teams/Mail responses
-│   │   ├── calendar-today.json
-│   │   ├── workiq-meetings.json
-│   │   └── ...
-│   └── scenarios/              # User utterance → expected behavior
-│       ├── skill-routing.yaml
-│       ├── tool-correctness.yaml
-│       ├── anti-patterns.yaml
-│       └── output-format.yaml
-├── harness.ts                  # Shared eval runner, mock MCP client
-├── judges/                     # Evaluation judges (rule-based + LLM)
-│   ├── tool-sequence.ts        # Checks tool call order and params
-│   ├── anti-pattern.ts         # Detects known anti-patterns
-│   ├── output-format.ts        # Validates output structure
-│   └── llm-judge.ts            # LLM-as-judge for subjective quality
-├── routing/                    # Skill routing evals
-│   └── routing.eval.ts
-├── tool-correctness/           # Tool calling evals
-│   └── tool-calls.eval.ts
-├── anti-patterns/              # Anti-pattern evals
-│   └── anti-patterns.eval.ts
-├── output-format/              # Output format evals
-│   └── output-format.eval.ts
-├── context-budget/             # Token efficiency evals
-│   └── context-budget.eval.ts
-└── report.ts                   # Aggregation + CI reporter
+├── harness.ts                   # Core types, mock servers, scoring (533 lines)
+├── report.ts                    # Aggregation + CI reporter (92 lines)
+├── fixtures/
+│   ├── crm-responses/           # Captured/hand-crafted CRM fixtures (gitignored)
+│   ├── oil-responses/           # Captured OIL fixtures (gitignored)
+│   ├── m365-responses/          # Captured M365 fixtures (gitignored)
+│   ├── generators/              # Synthetic fixture factories
+│   │   ├── crm-factory.ts       # 5 presets (pipelineHealth, stalePipeline, etc.)
+│   │   ├── oil-factory.ts       # 2 presets (standard, empty)
+│   │   ├── m365-factory.ts      # 2 presets (standard, empty)
+│   │   └── schema-guard.ts      # Shape validation & drift detection
+│   ├── scenarios/               # YAML-defined test scenarios (5 files, 34+ scenarios)
+│   └── scrub-map.json           # PII redaction mapping
+├── judges/
+│   ├── tool-sequence.ts         # Checks tool call order and params (181 lines)
+│   ├── anti-pattern.ts          # Detects AP-001→AP-010 with severity weights (368 lines)
+│   ├── output-format.ts         # Validates output structure, header-only columns (132 lines)
+│   └── llm-judge.ts             # LLM-as-judge with retry logic (261 lines)
+├── reporters/
+│   └── json-persist.ts          # Vitest custom reporter → JSON results (172 lines)
+├── results/
+│   ├── baseline.json            # Committed baseline (92.9%, 7 scenarios)
+│   ├── latest.json              # Gitignored — most recent run
+│   └── history/                 # Gitignored — timestamped archive
+├── traces/
+│   ├── types.ts                 # AgentTrace interface
+│   ├── trace-harness.ts         # Capture/promote/regression CLI (293 lines)
+│   └── golden/                  # Committed human-verified traces
+├── routing/routing.eval.ts
+├── tool-correctness/tool-calls.eval.ts
+├── anti-patterns/anti-patterns.eval.ts
+├── output-format/output-format.eval.ts
+├── context-budget/context-budget.eval.ts
+└── live/
+    ├── config.ts                # 4 model profiles
+    ├── live-harness.ts          # Full agent loop, 32 MOCK_TOOLS (843 lines)
+    └── live-agent.eval.ts       # 5 E2E scenarios + LLM judge (320 lines)
 ```
+
+**Total**: ~50 source files, ~6,000+ lines of eval framework code.
 
 ### 4.1 Eval Harness
 
-The harness intercepts MCP tool calls and records them without hitting real CRM/vault/M365. Two execution modes:
+The harness intercepts MCP tool calls and records them without hitting real CRM/vault/M365. Two execution modes, both implemented:
 
-#### Mode A: Trace-Based (offline, fast)
+#### Mode A: Trace-Based (offline, fast) — ✅ Implemented
 
-Capture tool call traces from real sessions, then replay and validate:
+Hand-crafted or YAML-driven scenarios with fixture-backed mock servers. Supports both disk-loaded fixtures and synthetic factory-generated fixtures.
 
 ```typescript
+// Implemented in harness.ts
 interface ToolCallTrace {
   tool: string;           // "msx-crm:get_milestones"
   params: Record<string, unknown>;
   response: unknown;      // mocked or captured response
   timestamp: number;
+  phase?: number;         // for parallel-call grouping
 }
 
 interface EvalScenario {
   id: string;
   name: string;
+  description?: string;
   userUtterance: string;
-  expectedSkill: string;
-  expectedToolCalls: ToolCallTrace[];
-  antiPatterns: string[]; // AP-001, AP-002, etc.
-  outputValidation: OutputCheck;
+  context?: {
+    role?: "Specialist" | "SE" | "CSA" | "CSAM";
+    customer?: string;
+    mediums?: Array<"crm" | "vault" | "workiq" | "teams" | "mail" | "calendar">;
+  };
+  expectedSkill?: string | null;
+  expectedSkills?: string[];
+  negativeSkills?: string[];
+  expectedCalls?: Array<{ tool: string; params?: Record<string, unknown>; paramsContains?: Record<string, unknown>; order?: number; phase?: number; before?: string; }>;
+  forbiddenCalls?: Array<{ tool: string; params?: Record<string, unknown>; }>;
+  forbiddenPatterns?: string[];
+  outputValidation?: OutputCheck;
 }
 ```
 
-#### Mode B: Live Agent Loop (online, comprehensive)
+#### Mode B: Live Agent Loop (online, comprehensive) — ✅ Implemented
 
-Run the actual agent against mock MCP servers, capture the full conversation:
+Run the actual agent (via Azure OpenAI) against mock MCP servers. System prompt assembled from real instruction/skill files. 32 tools available to the LLM. Max 10 turns safety limit.
 
 ```typescript
+// Implemented in live/config.ts
 interface LiveEvalConfig {
-  model: string;          // "claude-sonnet-4-20250514" | "gpt-4o" | etc.
-  systemPrompt: string;   // assembled from instructions + skill
-  mcpMocks: MockServer[]; // mock MCP servers returning fixture data
-  scenarios: EvalScenario[];
-  iterations: number;     // repeat for consistency measurement
+  model: string;          // "gpt-4o-mini" | "gpt-4o" | "gpt-4.1-mini" | "gpt-4.1"
+  judgeModel: string;
+  endpoint: string;       // Azure OpenAI endpoint
+  apiVersion: string;
+  temperature: number;
+  iterations: number;
 }
 ```
 
-### 4.2 Mock MCP Servers
+### 4.2 Mock MCP Servers — ✅ Implemented
 
-Lightweight mock implementations that return fixture data:
+Three mock servers with fixture loading from disk or synthetic factories:
 
 ```typescript
-// Mock CRM server — returns fixture responses keyed by tool+params
+// MockCrmServer — returns fixture responses, stages writes as no-ops
 class MockCrmServer {
-  private fixtures: Map<string, unknown>;
-  
-  handle(tool: string, params: Record<string, unknown>): unknown {
-    const key = this.fixtureKey(tool, params);
-    return this.fixtures.get(key) ?? { error: "no fixture" };
-  }
+  async loadFixtures(): Promise<void>   // from disk
+  loadFromFactory(fixtures: CrmFixtureSet): void  // from factory
+  handle(tool: string, params: Record<string, unknown>): unknown
+  readonly stagedWrites: Array<{ tool: string; params: Record<string, unknown> }>
 }
 
-// Mock OIL server — backed by the bench fixture vault
+// MockOilServer — disk + factory + inline fallback
 class MockOilServer {
-  // Uses real OIL graph/search against bench/fixtures/vault
-  // Write operations are no-ops that record the call
+  async loadFixtures(): Promise<void>
+  loadFromFactory(fixtures: OilFixtureSet): void
+  handle(tool: string, params: Record<string, unknown>): unknown
 }
+
+// MockM365Server — WorkIQ, Calendar, Teams, Mail
+class MockM365Server { ... }
 ```
 
-### 4.3 Judges
+### 4.3 Judges — ✅ Implemented
 
 #### Rule-Based Judges (deterministic, fast)
 
 ```typescript
-// Tool sequence judge — checks required calls are present and ordered
+// Tool sequence judge — best-match (params-aware), not first-match
 function judgeToolSequence(
   actual: ToolCallTrace[],
-  expected: ToolCallTrace[],
-): { pass: boolean; missing: string[]; extra: string[]; orderViolations: string[] }
+  expected: Array<{ tool: string; params?: Record<string, unknown>; paramsContains?: Record<string, unknown>; order?: number; before?: string }>,
+  forbidden?: Array<{ tool: string; params?: Record<string, unknown> }>,
+): { pass: boolean; score: number; missing: string[]; extra: string[]; orderViolations: string[] }
 
-// Anti-pattern judge — checks against AP-* patterns
+// Anti-pattern judge — severity-weighted, context-aware
 function judgeAntiPatterns(
   calls: ToolCallTrace[],
-  patterns: AntiPatternRule[],
-): { violations: Array<{ id: string; tool: string; reason: string }> }
+  context?: { mediums?: string[] },  // AP-004 respects scenario context
+): { pass: boolean; score: number; violations: AntiPatternViolation[] }
 
-// Output format judge — validates structural compliance
+// Output format judge — header-only column detection
 function judgeOutputFormat(
   output: string,
-  schema: OutputSchema,
-): { pass: boolean; missing: string[]; malformed: string[] }
+  schema: OutputCheck,
+): { pass: boolean; score: number; missingSections: string[]; missingColumns: string[] }
 ```
 
-#### LLM-as-Judge (subjective quality, slower)
+#### LLM-as-Judge (subjective quality, Phase 2) — ✅ Implemented
 
-For dimensions that can't be rule-checked:
-- **Synthesis quality**: Did the agent connect cross-medium signals meaningfully?
-- **Risk surfacing**: Did it proactively flag risks with evidence?
-- **Role appropriateness**: Did it respect the user's role boundaries?
-- **Conciseness**: Is the output action-oriented vs. verbose?
+Scores 5 dimensions at 1–5 scale with exponential backoff retry. Good output threshold: ≥4 per dimension, overall >0.7.
 
 ```typescript
 interface LlmJudgeResult {
   dimension: string;
   score: 1 | 2 | 3 | 4 | 5;
   reasoning: string;
-  passThreshold: number;  // e.g., 3
 }
 ```
 
@@ -395,13 +425,13 @@ scenarios:
 
 ### Per-Scenario Scores
 
-| Dimension | Weight | Scoring |
-|---|---|---|
-| Skill routing | 25% | Binary: correct activation / not |
-| Tool call correctness | 30% | % of expected calls present with correct params |
-| Anti-pattern avoidance | 20% | 1 - (violations / checked patterns) |
-| Output format compliance | 15% | % of required sections/columns present |
-| Context efficiency | 10% | Budget ratio below threshold |
+| Dimension | Weight | Scoring | Constants |
+|---|---|---|---|
+| Skill routing | 25% | Binary: correct activation / not | `SCORING_WEIGHTS.skillRouting` |
+| Tool call correctness | 30% | % of expected calls present with correct params | `SCORING_WEIGHTS.toolCorrectness` |
+| Anti-pattern avoidance | 20% | Severity-weighted: `1 - Σ(penalty_per_violation)` | `SCORING_WEIGHTS.antiPatterns` |
+| Output format compliance | 15% | % of required sections/columns present | `SCORING_WEIGHTS.outputFormat` |
+| Context efficiency | 10% | Budget ratio below threshold | `SCORING_WEIGHTS.contextEfficiency` |
 
 ### Aggregate Scores
 
@@ -423,54 +453,45 @@ Overall Score = Avg(all skill scores)
 
 ## 7. Implementation Phases
 
-### Phase 1: Scenario Fixtures + Rule-Based Judges (offline, no LLM)
+### Phase 1: Scenario Fixtures + Rule-Based Judges (offline, no LLM) — ✅ Complete
 
 **Goal**: Validate tool-call patterns from captured traces.
 
-1. Define scenario YAML files for the top-10 most-used skills:
-   - `morning-brief`
-   - `milestone-health-review`
-   - `pipeline-hygiene-triage`
-   - `vault-context-assembly`
-   - `mcem-stage-identification`
-   - `risk-surfacing`
-   - `task-hygiene-flow`
-   - `role-orchestration`
-   - `customer-evidence-pack`
-   - `exit-criteria-validation`
-2. Build `tool-sequence` and `anti-pattern` judges (pure TypeScript, no LLM dependency)
-3. Build CRM + OIL mock servers backed by fixture data
-4. Run as Vitest suite: `npm run eval` from repo root
+**Delivered**:
+- 5 YAML scenario files covering the top skills
+- 4 judges: `tool-sequence`, `anti-pattern` (severity-weighted), `output-format` (header-only columns), `llm-judge`
+- 3 mock MCP servers (CRM, OIL, M365) with fixture loading + factory support
+- 3 synthetic fixture generators (`crm-factory`, `oil-factory`, `m365-factory`) + schema guard
+- Vitest suite: `npm run eval` with `json-persist` reporter
+- Context budget hard failures (6K instruction limit, 8K skill limit, 40% chain budget)
+- Current baseline: 92.9% across 7 scenarios
 
-**Deliverables**: `evals/` directory, fixture files, 3 judges, Vitest config, `eval` npm script.
-
-### Phase 2: Live Agent Loop (requires LLM API)
+### Phase 2: Live Agent Loop (requires LLM API) — ✅ Complete
 
 **Goal**: Run the full agent against mock servers, validate end-to-end.
 
-1. Build live eval harness that:
-   - Assembles system prompt from instructions + skill files
-   - Connects to mock MCP servers
-   - Sends user utterance to LLM
-   - Captures tool calls + final output
-2. Add LLM-as-judge for subjective dimensions
-3. Run as CI gate with configurable model
+**Delivered**:
+- Live eval harness with system prompt assembly from real instruction/skill files
+- 32 mock tools (full CRM + OIL + M365 coverage) with tool name mapping
+- 5 E2E live scenarios loaded from YAML (`live-scenarios.yaml`)
+- LLM-as-judge (5 dimensions, 1–5 scale) with exponential backoff retry
+- Multi-model comparison support (4 model profiles: gpt-4o-mini, gpt-4o, gpt-4.1-mini, gpt-4.1)
+- Write safety verification: staged writes + no `execute_*` bypass + count match
+- Trace capture integration (`--capture-trace` flag)
+- Current live score: 94.0% across 5 scenarios
 
-**Deliverables**: Live harness, LLM judge, CI integration, multi-model comparison.
-
-### Phase 3: Regression + Diff Evals
+### Phase 3: Regression + Diff Evals — ✅ Complete
 
 **Goal**: Catch regressions when skills/instructions change.
 
-1. Golden traces: snapshot "known-good" tool call sequences per scenario
-2. On PR: re-run evals, diff against golden traces
-3. Alert on:
-   - New anti-pattern violations
-   - Tool call sequence changes
-   - Output format regressions
-   - Score drops >5% on any dimension
-
-**Deliverables**: Golden trace snapshots, diff reporter, PR check integration.
+**Delivered**:
+- Custom Vitest reporter (`json-persist.ts`) persisting results with git metadata
+- `baseline.json` (committed) + `latest.json` + `history/` (gitignored)
+- `eval-persist.js` script: `--baseline`, `--diff`, `--history`, `--fail-on-regression`
+- Golden trace infrastructure: `types.ts`, `trace-harness.ts` (capture/promote/regression)
+- Schema version stamps for trace staleness detection
+- `capture-fixtures.js` with PII scrubbing (`scrub-map.json`)
+- `sync-mock-tools.js` for MOCK_TOOLS drift prevention
 
 ---
 
@@ -528,10 +549,10 @@ A tracking table mapping skills → eval scenarios → coverage:
 
 ---
 
-## 11. Open Questions
+## 11. Open Questions — Resolved
 
-1. **Trace capture**: How do we capture real-session tool call traces without a production logging layer? Options: MCP server audit log (`msx/.copilot/logs/audit.ndjson`), VS Code output channel scraping, or manual trace authoring.
-2. **LLM cost**: Phase 2 live evals cost ~$0.02–0.10 per scenario per model. At 50 scenarios × 3 models × 5 iterations = ~$50 per full run. Acceptable for weekly CI?
-3. **Multi-model**: Do we eval against multiple LLMs (Claude, GPT-4o) to ensure instruction robustness, or pick one canonical model?
-4. **Instruction versioning**: When an instruction file changes, how do we version the golden traces? Git diff on the traces themselves?
-5. **Skill chain depth**: Skills like `morning-brief` chain 3+ sub-skills. Do we eval the chain end-to-end or unit-test each skill independently?
+1. **Trace capture**: ✅ Resolved — Live eval harness captures traces via `--capture-trace` flag. `trace-harness.ts` provides review/promote/regression CLI. Golden traces stored in `evals/traces/golden/`.
+2. **LLM cost**: ✅ Resolved — `live/config.ts` includes `estimateCost()`. Live evals are `skipIf(!HAS_AZURE_ENDPOINT)` so offline runs are free.
+3. **Multi-model**: ✅ Resolved — 4 model profiles in `config.ts`. Set `EVAL_MODELS=gpt-4o-mini,gpt-4o` for comparison runs.
+4. **Instruction versioning**: ✅ Resolved — `json-persist.ts` captures git commit/branch per run. `eval-persist.js --diff` compares against baseline. Traces carry schema version stamps.
+5. **Skill chain depth**: ✅ Resolved — `context-budget.eval.ts` measures chain budget as % of context window. Hard fail at 40% for the `morning-brief` chain.

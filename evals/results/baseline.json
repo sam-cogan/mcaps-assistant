@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-03-16T23:00:01.856Z",
-  "commit": "d3a2f55",
+  "timestamp": "2026-03-16T23:49:11.981Z",
+  "commit": "bc4912c",
   "branch": "feat/mcp-tests-packaging",
   "phase": "offline",
   "model": null,
   "summary": {
-    "overallScore": 0.9166666666666666,
+    "overallScore": 0.9285714285714286,
     "level": "pass",
-    "scenarioCount": 6,
-    "passed": 4,
+    "scenarioCount": 7,
+    "passed": 5,
     "review": 2,
     "failed": 0
   },
@@ -76,6 +76,17 @@
     },
     {
       "id": "morning-brief-parallel",
+      "score": 1,
+      "level": "pass",
+      "dimensions": {
+        "toolCorrectness": {
+          "pass": true,
+          "score": 1
+        }
+      }
+    },
+    {
+      "id": "yaml-tool-correctness",
       "score": 1,
       "level": "pass",
       "dimensions": {

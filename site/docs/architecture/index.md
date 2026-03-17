@@ -5,7 +5,6 @@ tags:
   - architecture
   - how-it-works
 ---
-
 # How It Works
 
 MCAPS IQ is a collection of **MCP servers**, **domain skills**, and **instruction files** that extend GitHub Copilot's capabilities into enterprise sales operations.
@@ -55,5 +54,11 @@ MCAPS IQ is a collection of **MCP servers**, **domain skills**, and **instructio
     ---
 
     STRIDE analysis, trust boundaries, mitigations, and residual risks for the full MCP toolchain.
+
+-   :material-test-tube:{ .lg .middle } __[Evaluation Framework](eval/index.md)__
+
+    ---
+
+    Automated testing for skill routing, tool correctness, anti-patterns, and output quality. Baseline: 92.9%.
 
 </div>

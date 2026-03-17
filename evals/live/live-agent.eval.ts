@@ -77,8 +77,14 @@ function skipWithoutEndpoint() {
 
 describe("Live Agent Loop", () => {
   describe("Morning Brief — end-to-end", () => {
-    it.skipIf(!HAS_AZURE_ENDPOINT)("produces a structured brief with correct tool calls", { timeout: 60_000 }, async () => {
+    it.skipIf(!HAS_AZURE_ENDPOINT)("produces a structured brief with correct tool calls", { timeout: 60_000 }, async ({ task }) => {
       const result = await runLiveScenario(getScenario("live-morning-brief"), config);
+
+      task.meta.evalScenarioId = result.evalResult.scenarioId;
+      task.meta.evalDimension = "live";
+      task.meta.evalScore = result.evalResult.overallScore;
+      task.meta.evalPass = result.evalResult.pass;
+      task.meta.evalViolations = result.evalResult.dimensions.antiPatterns?.violations.map((v) => v.id) ?? [];
 
       console.log(`\n📋 Morning Brief [${result.model}] — ${result.durationMs}ms`);
       console.log(`   Tool calls: ${result.toolCalls.map((c) => c.tool).join(", ")}`);
@@ -98,8 +104,13 @@ describe("Live Agent Loop", () => {
   });
 
   describe("Milestone Health — CSAM governance", () => {
-    it.skipIf(!HAS_AZURE_ENDPOINT)("returns milestone table with required columns", { timeout: 60_000 }, async () => {
+    it.skipIf(!HAS_AZURE_ENDPOINT)("returns milestone table with required columns", { timeout: 60_000 }, async ({ task }) => {
       const result = await runLiveScenario(getScenario("live-milestone-health"), config);
+
+      task.meta.evalScenarioId = result.evalResult.scenarioId;
+      task.meta.evalDimension = "live";
+      task.meta.evalScore = result.evalResult.overallScore;
+      task.meta.evalPass = result.evalResult.pass;
 
       console.log(`\n📋 Milestone Health [${result.model}] — ${result.durationMs}ms`);
       console.log(`   Tool calls: ${result.toolCalls.map((c) => c.tool).join(", ")}`);
@@ -120,8 +131,13 @@ describe("Live Agent Loop", () => {
   });
 
   describe("Write Safety — staging guard", () => {
-    it.skipIf(!HAS_AZURE_ENDPOINT)("stages writes instead of direct execution", { timeout: 60_000 }, async () => {
+    it.skipIf(!HAS_AZURE_ENDPOINT)("stages writes instead of direct execution", { timeout: 60_000 }, async ({ task }) => {
       const result = await runLiveScenario(getScenario("live-write-safety"), config);
+
+      task.meta.evalScenarioId = result.evalResult.scenarioId;
+      task.meta.evalDimension = "live";
+      task.meta.evalScore = result.evalResult.overallScore;
+      task.meta.evalPass = result.evalResult.pass;
 
       console.log(`\n📋 Write Safety [${result.model}] — ${result.durationMs}ms`);
       console.log(`   Tool calls: ${result.toolCalls.map((c) => c.tool).join(", ")}`);
@@ -151,8 +167,13 @@ describe("Live Agent Loop", () => {
   });
 
   describe("Vault-First Pattern", () => {
-    it.skipIf(!HAS_AZURE_ENDPOINT)("consults vault before CRM", { timeout: 60_000 }, async () => {
+    it.skipIf(!HAS_AZURE_ENDPOINT)("consults vault before CRM", { timeout: 60_000 }, async ({ task }) => {
       const result = await runLiveScenario(getScenario("live-vault-first"), config);
+
+      task.meta.evalScenarioId = result.evalResult.scenarioId;
+      task.meta.evalDimension = "live";
+      task.meta.evalScore = result.evalResult.overallScore;
+      task.meta.evalPass = result.evalResult.pass;
 
       console.log(`\n📋 Vault-First [${result.model}] — ${result.durationMs}ms`);
       console.log(`   Tool calls: ${result.toolCalls.map((c) => c.tool).join(", ")}`);
@@ -169,8 +190,13 @@ describe("Live Agent Loop", () => {
   });
 
   describe("Scoped CRM Queries", () => {
-    it.skipIf(!HAS_AZURE_ENDPOINT)("avoids N+1 milestone loop", { timeout: 60_000 }, async () => {
+    it.skipIf(!HAS_AZURE_ENDPOINT)("avoids N+1 milestone loop", { timeout: 60_000 }, async ({ task }) => {
       const result = await runLiveScenario(getScenario("live-scoped-query"), config);
+
+      task.meta.evalScenarioId = result.evalResult.scenarioId;
+      task.meta.evalDimension = "live";
+      task.meta.evalScore = result.evalResult.overallScore;
+      task.meta.evalPass = result.evalResult.pass;
 
       console.log(`\n📋 Scoped Query [${result.model}] — ${result.durationMs}ms`);
       console.log(`   Tool calls: ${result.toolCalls.map((c) => c.tool).join(", ")}`);

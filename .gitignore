@@ -2,6 +2,7 @@ node_modules/
 .beads
 # Logs
 *.log
+*.bak
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -88,3 +89,6 @@ evals/results/diff-report.md
 
 # Captured traces (golden traces are committed; raw captures are ephemeral)
 evals/traces/captured/
+
+# Auto-generated tool definitions (regenerated from live MCP servers)
+evals/generated/

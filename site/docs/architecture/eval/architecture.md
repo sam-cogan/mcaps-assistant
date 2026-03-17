@@ -1,7 +1,18 @@
+---
+title: Architecture & Implementation
+description: Runtime flow, mock infrastructure, judges, fixtures, live agent loop, and regression tracking.
+tags:
+  - evaluation
+  - architecture
+  - testing
+---
+
 # Evaluation Framework — Architecture & Implementation Guide
 
-> Companion to [eval-framework-spec.md](eval-framework-spec.md) (design goals).  
-> This document covers **how the code works**: runtime flow, mock infrastructure, judges, fixtures, and the live agent loop.
+> **Status**: Implemented (Phase 1 + Phase 2 + Phase 3 regression tracking)  
+> **Last verified**: 2026-03-16 — baseline 92.9%, live 94.0%  
+> Companion to [Design Spec](design-spec.md) (design goals), [Hardening](hardening.md) (hardening), [Regression & Test Data](regression-data.md) (regression & test data).  
+> This document covers **how the code works**: runtime flow, mock infrastructure, judges, fixtures, the live agent loop, regression tracking, and the fixture generator pipeline.
 
 ---
 
@@ -42,41 +53,70 @@ flowchart LR
 
 ```
 evals/
-├── harness.ts                      # Core types, mock servers, scoring engine
-├── report.ts                       # Markdown report & aggregation
+├── harness.ts                      # Core types, mock servers, scoring engine (533 lines)
+├── report.ts                       # Markdown report & aggregation (92 lines)
 ├── fixtures/
 │   ├── scenarios/                  # YAML-defined test scenarios
-│   │   ├── skill-routing.yaml      # 20+ routing test cases
+│   │   ├── skill-routing.yaml      # 15 routing test cases
 │   │   ├── tool-correctness.yaml   # 5 tool sequence scenarios
-│   │   ├── anti-patterns.yaml      # 10 anti-pattern definitions
-│   │   └── output-format.yaml      # Output schema validations
-│   ├── crm-responses/              # Mock CRM JSON payloads
+│   │   ├── anti-patterns.yaml      # 9 anti-pattern definitions
+│   │   ├── output-format.yaml      # Output schema validations
+│   │   └── live-scenarios.yaml     # 5 live agent E2E scenarios
+│   ├── generators/                 # Synthetic fixture factories
+│   │   ├── crm-factory.ts          # CRM fixture builder (5 presets)
+│   │   ├── oil-factory.ts          # Vault fixture builder (2 presets)
+│   │   ├── m365-factory.ts         # M365 fixture builder (2 presets)
+│   │   ├── schema-guard.ts         # Shape validation & drift detection
+│   │   └── index.ts                # Barrel exports
+│   ├── scrub-map.json              # Customer/user name redaction mapping
+│   ├── crm-responses/              # Mock CRM JSON payloads (gitignored)
 │   │   ├── whoami.json             # User identity (Jin Lee, CSA)
 │   │   ├── opportunities-contoso.json
 │   │   ├── milestones-active.json
-│   │   └── tasks-active.json
-│   └── m365-responses/             # Mock M365 JSON payloads
+│   │   ├── tasks-active.json
+│   │   └── ... (~11 files total)
+│   ├── oil-responses/              # Mock OIL JSON payloads (gitignored)
+│   │   ├── vault-context.json
+│   │   ├── customer-context-*.json
+│   │   └── ... (~10 files total)
+│   └── m365-responses/             # Mock M365 JSON payloads (gitignored)
 │       ├── calendar-today.json
 │       └── workiq-meetings.json
 ├── judges/
-│   ├── tool-sequence.ts            # Tool presence, params, ordering
-│   ├── anti-pattern.ts             # AP-001 through AP-010
-│   ├── output-format.ts            # Section/column/table validation
-│   └── llm-judge.ts               # Azure OpenAI subjective scoring
+│   ├── tool-sequence.ts            # Tool presence, params, ordering (181 lines)
+│   ├── anti-pattern.ts             # AP-001 through AP-010, severity-weighted (368 lines)
+│   ├── output-format.ts            # Section/column/table validation (132 lines)
+│   └── llm-judge.ts               # Azure OpenAI subjective scoring w/ retry (261 lines)
+├── reporters/
+│   └── json-persist.ts             # Vitest custom reporter → JSON results (172 lines)
+├── results/
+│   ├── baseline.json               # Committed baseline (92.9%, 7 scenarios)
+│   ├── latest.json                 # Gitignored — most recent run
+│   └── history/                    # Gitignored — timestamped run archive
+├── traces/
+│   ├── README.md                   # Trace format documentation
+│   ├── types.ts                    # AgentTrace interface (53 lines)
+│   ├── trace-harness.ts            # Capture/promote/regression CLI (293 lines)
+│   └── golden/                     # Committed human-verified traces
 ├── anti-patterns/
-│   └── anti-patterns.eval.ts       # AP detection unit tests
+│   └── anti-patterns.eval.ts       # AP detection unit tests (306 lines)
 ├── context-budget/
-│   └── context-budget.eval.ts      # Token budget calculations
+│   └── context-budget.eval.ts      # Token budget calculations (165 lines)
 ├── output-format/
-│   └── output-format.eval.ts       # Format compliance tests
+│   └── output-format.eval.ts       # Format compliance tests (167 lines)
 ├── routing/
-│   └── routing.eval.ts             # Skill trigger phrase routing
+│   └── routing.eval.ts             # Skill trigger phrase routing (185 lines)
 ├── tool-correctness/
-│   └── tool-calls.eval.ts          # Tool sequence simulations
+│   └── tool-calls.eval.ts          # Tool sequence simulations (316 lines)
 └── live/
-    ├── config.ts                   # Model profiles & env config
-    ├── live-harness.ts             # System prompt assembly + agent loop
-    └── live-agent.eval.ts          # 5 end-to-end live scenarios
+    ├── config.ts                   # Model profiles & env config (93 lines)
+    ├── live-harness.ts             # System prompt assembly + agent loop (843 lines)
+    └── live-agent.eval.ts          # 5 E2E live scenarios + LLM judge (320 lines)
+
+scripts/
+├── eval-persist.js                 # Baseline/diff/history CLI (256 lines)
+├── sync-mock-tools.js              # Auto-sync MOCK_TOOLS from MCP schemas (277 lines)
+└── capture-fixtures.js             # Live CRM/OIL/M365 fixture capture (828 lines)
 ```
 
 ---
@@ -91,28 +131,41 @@ Three mock servers live in `harness.ts`. They intercept tool calls and return fi
 classDiagram
     class MockCrmServer {
         +handle(toolName, params) → JSON
+        +loadFixtures() → Promise
+        +loadFromFactory(CrmFixtureSet) → void
         -whoami.json
         -opportunities-contoso.json
         -milestones-active.json
         -tasks-active.json
-        +stagedWrites: Map
+        +stagedWrites: Array
+        -WRITE_OPS: Set
     }
 
     class MockOilServer {
         +handle(toolName, params) → JSON
+        +loadFixtures() → Promise
+        +loadFromFactory(OilFixtureSet) → void
         -customer context fixture
         -vault search results
+        +stagedWrites: Array
+        -WRITE_OPS: Set
     }
 
     class MockM365Server {
         +handle(toolName, params) → JSON
+        +loadFixtures() → Promise
         -calendar-today.json
         -workiq-meetings.json
     }
 
-    class ToolCallRecorder {
-        +trace: ToolCallTrace[]
-        +record(server, tool, params, result)
+    class MockMcpRecorder {
+        +calls: ToolCallTrace[]
+        +record(tool, params, response, phase?)
+        +callsTo(tool) → ToolCallTrace[]
+        +wasCalled(tool) → boolean
+        +wasCalledWith(tool, paramsSubset) → boolean
+        +wasCalledBefore(toolA, toolB) → boolean
+        +reset()
     }
 
     MockCrmServer --> ToolCallRecorder : records calls
@@ -154,12 +207,16 @@ sequenceDiagram
 
 #### Write Safety in Mocks
 
-The `MockCrmServer` never executes write operations. Instead, it:
+Both `MockCrmServer` and `MockOilServer` never execute write operations. Instead, they:
 
-1. Accepts the write payload
-2. Assigns a `staged-{uuid}` operation ID
-3. Stores it in a `stagedWrites` map
-4. Returns the staging receipt (not a confirmed write)
+1. Accept the write payload
+2. Assign a `MOCK-OP-{N}` operation ID
+3. Store it in a `stagedWrites` array
+4. Return the staging receipt (not a confirmed write)
+
+CRM write operations: `create_milestone`, `update_milestone`, `create_task`, `update_task`, `close_task`, `manage_deal_team`, `manage_milestone_team`, `execute_operation`, `execute_all`.
+
+OIL write operations: `write_note`, `patch_note`, `apply_tags`, `draft_meeting_note`, `promote_findings`.
 
 This mirrors the production `approval-queue.ts` pattern — writes require explicit human confirmation via `execute_operation`.
 
@@ -200,9 +257,31 @@ Located in `evals/fixtures/m365-responses/`:
 | `calendar-today.json` | 2 meetings: Architecture Review (9 AM), Pipeline Review (2 PM) | Morning brief calendar section |
 | `workiq-meetings.json` | Recent meeting notes: landing zone topology, firewall rule changes | Cross-medium synthesis |
 
+### Synthetic Fixture Generators
+
+Located in `evals/fixtures/generators/`. These produce controlled fixture data without touching production CRM:
+
+| Factory | Presets | Purpose |
+|---|---|---|
+| `CrmFixtureFactory` | `pipelineHealth`, `stalePipeline`, `overdueMilestones`, `writeSafety`, `emptyPipeline` | Opportunities, milestones, tasks, identity |
+| `OilFixtureFactory` | `standard`, `empty` | Vault context, customer dossiers |
+| `M365FixtureFactory` | `standard`, `empty` | Calendar events, WorkIQ results |
+
+Mock servers accept factory output via `loadFromFactory()`, giving each scenario full control over the data shape without disk fixtures.
+
+`schema-guard.ts` validates synthetic fixtures against CRM entity schemas to catch drift: `validateRecord()`, `validateFixtureSet()`, `compareShapes()`.
+
 ### YAML Scenario Fixtures
 
-Located in `evals/fixtures/scenarios/`:
+Located in `evals/fixtures/scenarios/` — 5 files, 34+ scenarios:
+
+| File | Scenarios | Purpose |
+|---|---|---|
+| `skill-routing.yaml` | 15 | Trigger phrases, negative tests, chain activations, role disambiguation |
+| `tool-correctness.yaml` | 5 | Factory-bound tool sequences with order/phase/params |
+| `anti-patterns.yaml` | 9 | AP-001→AP-010 avoidance scenarios |
+| `output-format.yaml` | — | Format compliance schemas |
+| `live-scenarios.yaml` | 5 | End-to-end live agent scenarios |
 
 ```yaml
 # Example from skill-routing.yaml
@@ -226,18 +305,16 @@ Located in `evals/fixtures/scenarios/`:
 ```
 
 ```yaml
-# Example from tool-correctness.yaml
-- id: milestone-health-flow
+# Example from tool-correctness.yaml — with factory binding
+- id: milestone-health-overdue
   skill: milestone-health-review
-  expected_tools:
-    - tool: msx-crm:crm_whoami
-    - tool: oil:get_customer_context
-      params_contain: { customer: "Contoso" }
+  fixture: overdueMilestones
+  context:
+    role: CSAM
+    customer: Contoso
+  expected_calls:
     - tool: msx-crm:get_milestones
-      params_contain: { customerKeyword: "Contoso" }
-      after: oil:get_customer_context
-  forbidden_patterns:
-    - AP-001  # unscoped get_milestones
+      paramsContains: { customerKeyword: "Contoso", statusFilter: "active" }
 ```
 
 ---
@@ -285,7 +362,7 @@ Supports wildcards (`msx-crm:*`) for "any CRM tool was called" assertions.
 
 #### `anti-pattern.ts` — Anti-Pattern Detection
 
-Scans the trace for 10 known bad patterns:
+Scans the trace for 10 known bad patterns with **severity-weighted scoring**. Each violation carries a different penalty (AP-005 write bypass = 0.5, AP-001 unscoped query = 0.3, AP-010 role assumption = 0.1, default = 0.2). AP-004 accepts scenario `context.mediums` to skip vault-skip checks on CRM-only scenarios. AP-003 uses param-aware scope grouping for N+1 detection:
 
 ```mermaid
 flowchart LR
@@ -299,7 +376,7 @@ flowchart LR
         AP5["AP-005: Write without staging\n(execute_operation without staged preview)"]
         AP6["AP-006: Guessed property names\n(msp_stage vs msp_activesalesstage)"]
         AP7["AP-007: Disallowed entity set"]
-        AP8["AP-008: Vault state as live truth\n(Phase 2 LLM judge only)"]
+        AP8["AP-008: Vault state as live truth\n(stub — deferred to LLM judge)"]
         AP9["AP-009: Unbounded WorkIQ\n(missing top: or limit)"]
         AP10["AP-010: Role assumed\n(no crm_whoami call)"]
     end
@@ -311,9 +388,9 @@ flowchart LR
 
 Validates the final agent response against expected schemas:
 
-- **Required sections**: e.g., morning brief must contain `Pipeline`, `Milestones`, `Meetings`
-- **Required columns**: e.g., milestone table needs `Name`, `Monthly Use`, `Due Date`, `Status`, `Owner`
-- **Format type**: table vs. prose detection (markdown table pipe `|` detection)
+- **Required sections**: e.g., morning brief must contain `Pipeline`, `Milestones`, `Meetings` (matches headings or bold text)
+- **Required columns**: e.g., milestone table needs `Name`, `Monthly Use`, `Due Date`, `Status`, `Owner` — detection limited to **table header rows only** (the row immediately before a `|---|` separator), preventing false positives from data rows
+- **Format type**: table vs. prose detection via `isTableSeparatorRow()` helper
 - **Forbidden patterns**: e.g., prose-only when table is required
 
 #### `llm-judge.ts` — Subjective Quality (Phase 2 Only)
@@ -328,7 +405,9 @@ Uses Azure OpenAI (RBAC auth via `DefaultAzureCredential`) to score on 5 dimensi
 | **Conciseness** | Action-oriented, not verbose |
 | **Table Compliance** | Proper format with required columns |
 
-Pass threshold: score ≥ 3 per dimension.
+Pass threshold: good output scores ≥ 4 per dimension, overall > 0.7. Poor output must score < 0.5.
+
+Includes **exponential backoff retry logic** (3 retries on 429/timeout: 1s, 2s, 4s delays). Uses structured JSON rubric prompting with `runLlmJudge()` and `formatJudgeReport()` exports.
 
 ---
 
@@ -364,11 +443,11 @@ sequenceDiagram
 
 | Test Suite | File | # Tests | Validates |
 |---|---|---|---|
-| Skill Routing | `routing/routing.eval.ts` | 12 | Trigger phrases → correct skill activation |
-| Tool Correctness | `tool-correctness/tool-calls.eval.ts` | 6 | Tool sequence, params, ordering |
-| Anti-Patterns | `anti-patterns/anti-patterns.eval.ts` | 10 | Each AP with bad & good traces |
-| Output Format | `output-format/output-format.eval.ts` | 5 | Table columns, sections, forbidden patterns |
-| Context Budget | `context-budget/context-budget.eval.ts` | 3 | Token counts per instruction/skill/chain |
+| Skill Routing | `routing/routing.eval.ts` | 12+ | Trigger phrases → correct skill activation, negative/off-topic, chain activation, skill metadata quality |
+| Tool Correctness | `tool-correctness/tool-calls.eval.ts` | 6+ | Handwritten + YAML-driven scenarios with factory-bound fixtures |
+| Anti-Patterns | `anti-patterns/anti-patterns.eval.ts` | 18+ | Each AP with both positive (catches bad) and negative (passes good) traces |
+| Output Format | `output-format/output-format.eval.ts` | 5 | Table columns (header-only), sections, forbidden patterns |
+| Context Budget | `context-budget/context-budget.eval.ts` | 4+ | Instruction soft/hard limits (2K/6K), skill limits (3K/8K), chain budget (40%), fixture freshness (30-day hard fail) |
 
 ---
 
@@ -423,23 +502,17 @@ flowchart TD
 
 ### Mock Tools Definition
 
-`live-harness.ts` defines a `MOCK_TOOLS` array — an OpenAI function-calling schema for 15+ tools that the LLM can call:
+`live-harness.ts` defines a `MOCK_TOOLS` array — an OpenAI function-calling schema for **32 tools** that the LLM can call. Tool names use underscore format (`msx_crm__get_milestones`) which the harness maps to prefix format (`msx-crm:get_milestones`) when routing to mock servers.
 
-| Tool | Description |
+| Category | Tools |
 |---|---|
-| `crm_whoami` | Get current user identity |
-| `crm_query` | OData query against CRM |
-| `get_milestones` | Retrieve milestones with scoping |
-| `get_my_active_opportunities` | Get user's pipeline |
-| `create_milestone` / `update_milestone` | Staged write ops |
-| `create_task` / `close_task` | Task management |
-| `execute_operation` | Execute a staged write |
-| `get_customer_context` | Vault lookup |
-| `search_vault` | Vault search |
-| `write_note` | Vault write |
-| `ask_work_iq` | WorkIQ query |
-| `ListCalendarView` | Calendar events |
-| `SearchMessages` | Email search |
+| **CRM Read** | `crm_whoami`, `crm_auth_status`, `crm_query`, `crm_get_record`, `get_milestones`, `get_my_active_opportunities`, `list_opportunities`, `get_milestone_activities`, `get_milestone_field_options`, `get_task_status_options`, `find_milestones_needing_tasks`, `list_pending_operations` |
+| **CRM Write** (staged) | `create_milestone`, `update_milestone`, `create_task`, `update_task`, `close_task`, `manage_deal_team`, `manage_milestone_team`, `execute_operation`, `execute_all` |
+| **OIL Read** | `get_vault_context`, `get_customer_context`, `search_vault`, `read_note`, `query_notes`, `query_graph` |
+| **OIL Write** (staged) | `write_note`, `patch_note`, `apply_tags`, `draft_meeting_note`, `promote_findings` |
+| **M365** | `ask_work_iq`, `ListCalendarView`, `SearchMessages` |
+
+`scripts/sync-mock-tools.js` auto-generates tool definitions from live MCP server schemas to prevent drift.
 
 ### Live Scenarios
 
@@ -457,9 +530,9 @@ Set `EVAL_MODELS=gpt-4o-mini,gpt-4o,gpt-4.1-mini` to run all scenarios across mu
 
 ---
 
-## Report Generation
+## Report Generation & Score Persistence
 
-`report.ts` aggregates individual scenario results into a markdown summary:
+`report.ts` aggregates individual scenario results into a markdown summary. The `json-persist.ts` Vitest reporter automatically persists structured JSON results after every run.
 
 ```mermaid
 flowchart LR
@@ -468,6 +541,13 @@ flowchart LR
     R3["Scenario 3: 88%"] --> Agg
     Agg --> Format["formatReport()"]
     Format --> MD["Markdown Table\n🟢 🟡 🔴 indicators"]
+    
+    Tests["Vitest Tests\n(meta.evalScenarioId)"] --> Reporter["json-persist.ts"]
+    Reporter --> Latest["results/latest.json"]
+    Reporter --> History["results/history/{ts}.json"]
+    Latest --> Diff["eval-persist.js --diff"]
+    Baseline["results/baseline.json"] --> Diff
+    Diff --> DiffMD["diff-report.md"]
 ```
 
 Verdicts:
@@ -475,24 +555,47 @@ Verdicts:
 - **🟡 REVIEW** — score 70–84%
 - **🔴 FAIL** — score < 70%
 
+### Score Persistence Detail
+
+Tests attach metadata via `attachEvalMeta(task, { scenarioId, dimension, score, pass, violations })`. The custom reporter (`json-persist.ts`) collects all metadata at run end and writes:
+
+- `results/latest.json` — git commit, branch, phase, model, aggregate summary, per-scenario breakdowns
+- `results/history/{timestamp}.json` — same data, timestamped for trend analysis
+- `results/baseline.json` — committed "known good" reference (via `npm run eval:baseline`)
+
 ---
 
 ## Configuration
 
 ### Vitest Configs
 
-| Config | Command | Includes | Timeout |
-|---|---|---|---|
-| `vitest.config.ts` | `npm run eval` | `evals/**/*.eval.ts` (excludes `live/`) | 30s |
-| `vitest.live.config.ts` | `npm run eval:live` | `evals/live/**/*.eval.ts` only | 120s |
+| Config | Command | Includes | Timeout | Reporters |
+|---|---|---|---|---|
+| `vitest.config.ts` | `npm run eval` | `evals/**/*.eval.ts` (excludes `live/`) | 30s | `verbose` + `json-persist` |
+| `vitest.live.config.ts` | `npm run eval:live` | `evals/live/**/*.eval.ts` only | 120s | `verbose` + `json-persist` |
+
+Both configs include the `json-persist.ts` custom reporter, which writes results to `evals/results/` after each run.
 
 ### npm Scripts
 
 ```bash
-npm run eval          # Phase 1 — offline, free, fast
-npm run eval:watch    # Phase 1 — watch mode
-npm run eval:live     # Phase 2 — requires Azure OpenAI
-npm run eval:all      # Both phases sequentially
+# Core eval commands
+npm run eval              # Phase 1 — offline, free, fast
+npm run eval:watch        # Phase 1 — watch mode
+npm run eval:live         # Phase 2 — requires Azure OpenAI
+npm run eval:live:watch   # Phase 2 — watch mode
+npm run eval:all          # Both phases sequentially
+
+# Regression tracking
+npm run eval:baseline     # Run offline + update baseline.json
+npm run eval:diff         # Compare latest.json vs baseline.json
+npm run eval:history      # Show score trend from history/
+npm run eval:trace        # Trace capture/promote/regression CLI
+
+# Fixture management
+npm run fixtures:capture          # Capture all servers
+npm run fixtures:capture:dry      # Preview without writing
+npm run fixtures:capture:redact   # Capture with PII scrubbing
 ```
 
 ### Environment Variables (Phase 2)
@@ -624,10 +727,113 @@ CRM fixtures always load from disk (hand-crafted or captured). OIL fixtures fall
 ## Adding a New Eval Scenario
 
 1. **Define the scenario** in the appropriate YAML file under `evals/fixtures/scenarios/`
-2. **Add fixture data** if needed in `evals/fixtures/crm-responses/` or `m365-responses/`
+2. **Add fixture data** via a `CrmFixtureFactory` preset, or add JSON to `evals/fixtures/crm-responses/`
 3. **Write the test** in the corresponding `*.eval.ts` file
-4. **For live scenarios**, add to `evals/live/live-agent.eval.ts`
-5. **Run**: `npm run eval` (offline) or `npm run eval:live` (live)
+4. **Attach metadata** via `attachEvalMeta(task, { scenarioId, dimension, score, pass })` for reporter integration
+5. **For live scenarios**, add to `evals/fixtures/scenarios/live-scenarios.yaml`
+6. **Run**: `npm run eval` (offline) or `npm run eval:live` (live)
+7. **Update baseline**: `npm run eval:baseline` after confirming scores are correct
+
+---
+
+## Regression Tracking
+
+### Score Persistence
+
+Every eval run persists results via a custom Vitest reporter (`evals/reporters/json-persist.ts`):
+
+- **`evals/results/latest.json`** (gitignored) — written after every run
+- **`evals/results/history/{timestamp}.json`** (gitignored) — timestamped archive
+- **`evals/results/baseline.json`** (committed) — the "known good" reference
+
+Each result file contains git commit/branch, phase, model, aggregate summary, and per-scenario dimension breakdowns.
+
+### Baseline Workflow
+
+```mermaid
+flowchart LR
+    A["npm run eval"] --> B["latest.json"]
+    B --> C["npm run eval:diff"]
+    C --> D{"Regression?"}
+    D -->|No| E["✅ Ship"]
+    D -->|Yes| F["🔴 Investigate"]
+    G["npm run eval:baseline"] --> H["baseline.json\n(committed)"]
+```
+
+1. `npm run eval:baseline` — runs Phase 1, writes `baseline.json`, committed to repo
+2. `npm run eval` — writes `latest.json` (gitignored) + appends to `history/`
+3. `npm run eval:diff` — compares latest vs. baseline, outputs `diff-report.md`, exits 1 on regression
+4. `npm run eval:history` — prints score trend from history files
+
+---
+
+## Trace System
+
+The trace system captures real agent sessions as replayable golden traces for regression testing.
+
+```
+evals/traces/
+├── types.ts              # AgentTrace, TraceToolCall, TraceVerification interfaces
+├── trace-harness.ts      # Capture, review, promote, regression CLI
+├── README.md             # Format documentation
+├── golden/               # Committed human-verified traces (.gitkeep)
+└── captured/             # Gitignored raw session captures
+```
+
+### Workflow
+
+```bash
+npm run eval:live -- --capture-trace      # Capture during live eval
+npm run eval:trace -- --review <file>     # Review a captured trace
+npm run eval:trace -- --promote <file>    # Promote to golden (human-verified)
+npm run eval:trace -- --regression        # Regression check vs golden traces
+```
+
+Traces include schema version stamps (SHA-256 hash of MOCK_TOOLS) for staleness detection.
+
+---
+
+## Current Results
+
+| Run | Phase | Overall | Level | Scenarios | Passed | Review | Failed |
+|-----|-------|--------:|-------|----------:|-------:|-------:|-------:|
+| **Baseline** | offline | 92.9% | 🟢 | 7 | 5 | 2 | 0 |
+| **Latest** | live | 94.0% | 🟢 | 5 | 4 | 1 | 0 |
+
+### Baseline Scenario Breakdown (2026-03-16)
+
+| Scenario | Score | Level | Notes |
+|----------|------:|-------|-------|
+| `ap001-unscoped-milestones` | 70% | 🟡 | AP-001 violation detected (expected) |
+| `ap004-vault-skip` | 80% | 🟡 | AP-004 violation detected (expected) |
+| `milestone-table-format` | 100% | 🟢 | |
+| `morning-brief-format` | 100% | 🟢 | |
+| `milestone-health-scoped` | 100% | 🟢 | |
+| `morning-brief-parallel` | 100% | 🟢 | |
+| `yaml-tool-correctness` | 100% | 🟢 | |
+
+### Live Scenario Breakdown
+
+| Scenario | Score | Level |
+|----------|------:|-------|
+| `live-morning-brief` | 100% | 🟢 |
+| `live-milestone-health` | 100% | 🟢 |
+| `live-write-safety` | 100% | 🟢 |
+| `live-vault-first` | 70% | 🟡 |
+| `live-scoped-query` | 100% | 🟢 |
+
+---
+
+## Known Gaps & Future Work
+
+| Item | Status | Notes |
+|------|--------|-------|
+| AP-008 (vault cache as live truth) | Stub (`return null`) | Deferred to LLM judge |
+| Golden traces | Empty directory | Infrastructure complete, no traces promoted yet |
+| Routing eval YAML binding | Partial | `routing.eval.ts` uses hardcoded tests, not `skill-routing.yaml` at runtime |
+| M365 captured fixtures | Minimal | Only calendar + workiq; no real Teams/Mail captures |
+| Schema guard integration tests | Not exercised via eval | `schema-guard.ts` exports exist but no eval verifies them |
+| Multi-model comparison baseline | Ready | Only runs when `EVAL_MODELS` has 2+ entries; no comparison data yet |
 
 ---
 
@@ -641,6 +847,7 @@ flowchart TB
         CopilotMD[".github/copilot-instructions.md"]
         YAMLScenarios["evals/fixtures/scenarios/*.yaml"]
         JSONFixtures["evals/fixtures/**/*.json"]
+        Factories["evals/fixtures/generators/*-factory.ts"]
     end
 
     subgraph Runtime["Eval Runtime"]
@@ -648,14 +855,14 @@ flowchart TB
         MockCRM["MockCrmServer"]
         MockOIL["MockOilServer"]
         MockM365["MockM365Server"]
-        Recorder["ToolCallRecorder"]
+        Recorder["MockMcpRecorder"]
     end
 
     subgraph Judges
         ToolSeq["tool-sequence.ts"]
-        AntiPat["anti-pattern.ts"]
-        OutFmt["output-format.ts"]
-        LLMJudge["llm-judge.ts\n(Phase 2 only)"]
+        AntiPat["anti-pattern.ts\n(severity-weighted)"]
+        OutFmt["output-format.ts\n(header-only columns)"]
+        LLMJudge["llm-judge.ts\n(Phase 2 only, w/ retry)"]
     end
 
     subgraph Tests["Eval Tests (Vitest)"]
@@ -669,10 +876,15 @@ flowchart TB
 
     subgraph Output
         Report["report.ts → Markdown"]
+        Reporter["json-persist.ts → JSON"]
+        Baseline["baseline.json"]
+        DiffScript["eval-persist.js → diff"]
     end
 
     JSONFixtures --> MockCRM
     JSONFixtures --> MockM365
+    Factories --> MockCRM
+    Factories --> MockOIL
     YAMLScenarios --> Tests
     Skills --> LiveAgent
     Instructions --> LiveAgent
@@ -683,5 +895,8 @@ flowchart TB
     MockM365 --> Recorder
     Recorder --> Judges
     Tests --> Judges
+    Tests --> Reporter
     Judges --> Report
+    Reporter --> Baseline
+    Reporter --> DiffScript
 ```
