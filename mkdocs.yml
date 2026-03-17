@@ -54,7 +54,8 @@ theme:
 plugins:
   - search:
       separator: '[\s\-\.]+'
-  - tags
+  - tags:
+      tags_file: tags.md
   - glightbox
   - mermaid-zoom
 
@@ -113,6 +114,7 @@ extra_css:
 
 extra_javascript:
   - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
 
 nav:
   - Home: index.md
@@ -144,6 +146,12 @@ nav:
     - Context Optimization: architecture/context-optimization.md
     - Safety & Write Operations: architecture/safety.md
     - Threat Model: architecture/threat-model.md
+    - Evaluation Framework:
+      - architecture/eval/index.md
+      - Architecture: architecture/eval/architecture.md
+      - Design Spec: architecture/eval/design-spec.md
+      - Hardening: architecture/eval/hardening.md
+      - Regression & Test Data: architecture/eval/regression-data.md
   - Integrations:
     - integrations/index.md
     - Obsidian Vault (OIL): integrations/obsidian.md
