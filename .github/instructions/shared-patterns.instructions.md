@@ -114,7 +114,7 @@ Use that file when a prompt clearly maps to a chain.
 **PBI chain rules** (see `pbi-context-bridge.instructions.md`):
 
 - For medium/heavy PBI prompts, run PBI retrieval + analysis as a **subagent** so raw DAX data stays in the subagent's context. The parent receives only the final rendered report.
-- PBI reports are persisted to `.copilot/sessions/pbi/` for downstream re-read without re-executing queries.
+- PBI reports are persisted to the vault (`0. Inbox/Agent Output/pbi/`) for downstream re-read without re-executing queries.
 - Downstream skills scope their CRM/WorkIQ queries using the report's gap analysis table, conversion rankings, and recommended actions.
 
 ## Connect Hook Capture (Post-Action)
@@ -132,20 +132,20 @@ Detailed formatting, classification, and schema rules are centralized in `.githu
 
 ### Artifact Output Directory (Mandatory)
 
-All generated file artifacts MUST be saved under `.copilot/docs/` in the workspace root. This directory is gitignored and serves as the single collection point for agent-produced documents.
+All generated file artifacts MUST be saved to the Obsidian vault — never into a git repository working tree. Route by context:
 
-| Artifact type | Default path |
+| Context | Default path |
 |---|---|
-| PDF | `.copilot/docs/<name>.pdf` |
-| Word (.docx) | `.copilot/docs/<name>.docx` |
-| Excel (.xlsx) | `.copilot/docs/<name>.xlsx` |
-| PowerPoint (.pptx) | `.copilot/docs/<name>.pptx` |
-| Excalidraw | `.copilot/docs/excalidraw/<name>.excalidraw` |
-| Other documents | `.copilot/docs/<name>.<ext>` |
+| Customer-specific artifact | `<VAULT>/Customers/<Customer>/Outputs/<name>.<ext>` |
+| General / no customer | `<VAULT>/0. Inbox/Agent Output/<name>.<ext>` |
+| Excalidraw diagrams | `<VAULT>/0. Inbox/Agent Output/excalidraw/<name>.excalidraw` |
 
-- Create `.copilot/docs/` (and subdirectories) automatically before writing — use `mkdir -p` or equivalent.
+Where `<VAULT>` is the Obsidian vault path (from `OBSIDIAN_VAULT_PATH` env var or discovered via OIL tools). If the vault is unavailable, fall back to `~/Documents/Agent Output/`.
+
+- Create directories automatically before writing — use `mkdir -p` or equivalent.
 - If the user provides an explicit output path, honor it instead.
 - Use descriptive filenames: `<customer>-<artifact>-<date>.<ext>` (e.g. `contoso-pricing-model-2026-03-16.xlsx`).
+- **NEVER save generated artifacts into a git repository working tree** unless explicitly requested.
 
 ### CRM Record Linkification (Mandatory)
 

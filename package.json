@@ -9,6 +9,7 @@
   },
   "scripts": {
     "setup": "node scripts/init.js",
+    "setup:user": "node scripts/bootstrap-user.js",
     "check": "node scripts/init.js --check",
     "postinstall": "node scripts/init.js",
     "docs:install": "pip install -r site/requirements.txt",

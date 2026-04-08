@@ -22,7 +22,7 @@ Approach A: Subagent Delegation (preferred for medium/heavy prompts)
 Approach B: Inline with DAX Pre-Aggregation (light prompts only)
   ├─ DAX queries use TOPN, SUMMARIZECOLUMNS, server-side counts
   ├─ Agent analyzes in current context
-  └─ Persist final report to .copilot/sessions/pbi/ for downstream re-read
+  └─ Persist final report to vault (0. Inbox/Agent Output/pbi/) for downstream re-read
 ```
 
 ## DAX-Side Pre-Aggregation
@@ -35,13 +35,15 @@ Push analysis logic into DAX to reduce returned rows before they enter context. 
 
 ## Session File Persistence
 
-After the PBI prompt completes its analysis and renders the final report, persist the report to the workspace so downstream operations can re-read it without re-executing PBI queries:
+After the PBI prompt completes its analysis and renders the final report, persist the report to the vault so downstream operations can re-read it without re-executing PBI queries:
 
 ```
-.copilot/sessions/pbi/<prompt-name>-<date>.md
+<VAULT>/0. Inbox/Agent Output/pbi/<prompt-name>-<date>.md
 ```
 
-Example: `.copilot/sessions/pbi/azure-portfolio-review-2026-03-12.md`
+Example: `<VAULT>/0. Inbox/Agent Output/pbi/azure-portfolio-review-2026-03-12.md`
+
+Where `<VAULT>` is the Obsidian vault path (see `shared-patterns.instructions.md` § Artifact Output Directory).
 
 This is the **full rendered report** — not a compressed digest. Downstream skills re-read the file to extract TPIDs, gap signals, opportunity rankings, and recommended actions.
 

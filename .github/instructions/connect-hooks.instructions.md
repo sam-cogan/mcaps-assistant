@@ -65,6 +65,27 @@ Only include evidence that meets **at least one** of:
 
 Exclude: pure status updates with no outcome, administrative actions without impact, duplicative chatter.
 
+## Team Updates Log — Primary Evidence Source
+
+The vault file `3. Resources/Team Updates/Team Updates FY{XX}.md` (where `{XX}` is the fiscal year, e.g. `FY26`) contains a weekly log of all achievements and activity, organized by dated section headers (e.g. `W/C 16th February`).
+
+**When building Connect hooks for a quarter or year:**
+
+1. Read the team updates file using `oil:read_note({ path: "3. Resources/Team Updates/Team Updates FY{XX}.md" })`.
+2. To scope to a quarter, read individual weekly sections that fall within the quarter's date range using the `section` parameter.
+3. Extract concrete achievements, deliverables, and impact evidence from each week.
+4. Cross-reference with CRM milestones and M365 evidence to enrich and verify claims.
+5. Apply the attribution gate and evidence qualification rules above before writing hooks.
+
+**FY quarter boundaries (approximate):**
+
+| Quarter | Months |
+|---------|--------|
+| Q1 | July–September |
+| Q2 | October–December |
+| Q3 | January–March |
+| Q4 | April–June |
+
 ## Example
 
 ```yaml

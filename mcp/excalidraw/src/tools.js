@@ -7,7 +7,11 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { renderToSvg } from './renderer.js';
 
-const DRAWINGS_DIR = path.resolve(process.env.REPO_ROOT || '.', '.copilot', 'docs', 'excalidraw');
+// Output directory: prefer vault, then REPO_ROOT fallback, then cwd
+const vaultPath = process.env.OBSIDIAN_VAULT_PATH;
+const DRAWINGS_DIR = vaultPath
+  ? path.resolve(vaultPath, '0. Inbox', 'Agent Output', 'excalidraw')
+  : path.resolve(process.env.REPO_ROOT || '.', '.copilot', 'docs', 'excalidraw');
 
 function text(content) { return { content: [{ type: 'text', text: content }] }; }
 function error(msg) { return { content: [{ type: 'text', text: `Error: ${msg}` }], isError: true }; }
@@ -40,7 +44,7 @@ export function registerTools(server) {
   // ── create_drawing ──
   server.tool(
     'create_drawing',
-    'Create an Excalidraw diagram file. Validates the JSON structure and ensures elements are non-empty. Saves to .copilot/docs/excalidraw/.',
+    'Create an Excalidraw diagram file. Validates the JSON structure and ensures elements are non-empty. Saves to the configured output directory (vault or workspace).',
     {
       filename: z.string().describe('Filename for the drawing (e.g. "Contoso_milestones.excalidraw"). Must end with .excalidraw'),
       document: z.string().describe('Complete Excalidraw JSON as a string. Must have type:"excalidraw", version:2, and a non-empty elements array.'),
@@ -89,7 +93,7 @@ export function registerTools(server) {
   // ── list_drawings ──
   server.tool(
     'list_drawings',
-    'List all Excalidraw diagram files in .copilot/docs/excalidraw/. Returns filenames, sizes, and element counts.',
+    'List all Excalidraw diagram files in the output directory. Returns filenames, sizes, and element counts.',
     {},
     async () => {
       try {
@@ -115,7 +119,7 @@ export function registerTools(server) {
         }
 
         if (drawings.length === 0) {
-          return text('No drawings found in .copilot/docs/excalidraw/');
+          return text('No drawings found in the output directory');
         }
 
         const lines = drawings.map(d =>

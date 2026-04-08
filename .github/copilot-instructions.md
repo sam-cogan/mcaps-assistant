@@ -1,5 +1,10 @@
 # Copilot Instructions for MSX Helper MCP
 
+> **Layer model**: User-level `~/.github/copilot-instructions.md` defines the assistant persona,
+> file routing, and MCP server intent. This file adds workspace-specific operational rules that
+> apply when the full skill library is loaded (via mcaps CLI `--add-dir` or this workspace).
+> Do not duplicate user-level behavior here.
+
 ## Intent (Resolve First)
 
 The agent strengthens cross-role communication and strategic alignment for account teams. MSX is one medium — not the mission. For the full model, see `.github/instructions/intent.instructions.md`.
@@ -24,9 +29,21 @@ At session start, probe: CRM (`crm_whoami`), Vault (`get_vault_context`), WorkIQ
 - If an MCP tool fails, retry with corrected parameters first. Local diagnostics only when explicitly requested.
 - Derive missing identifiers via MCP read tools (e.g., `crm_whoami`) — do not create ad-hoc scripts.
 
+## Personal Context
+
+Sam's identity, working patterns, and global defaults (e.g. Azure region) → user-level `~/.github/instructions/personal-context.instructions.md`. Always use `swedencentral` for Azure resources.
+
 ## Vault-First Scoping
 
 For account-specific work, if OIL is available, start in the Obsidian vault before querying live systems.
+
+## Personal Productivity (Obsidian + Things 3)
+
+The vault serves two purposes: **CRM context** (via OIL tools — see `obsidian-vault.instructions.md`) and **personal project management** (via direct Obsidian MCP tools — see `obsidian-project-management.instructions.md`). These are complementary interfaces to the same vault.
+
+- **Project management**: PARA folder layout, hub notes at `1. Projects/{Name}/{Name}.md`, status tracking. See `obsidian-project-management.instructions.md`.
+- **Things 3**: Task manager with areas (Customer Work, CSA Work, Community, Admin), tags (`@waiting`, `@deep-work`, sizing), and known MCP gotchas. See user-level `~/.github/instructions/things3-mcp.instructions.md`.
+- **Prompts**: `New project`, `Status update`, and `Weekly review` prompts orchestrate cross-system workflows between Obsidian and Things.
 
 ## MSX/CRM Operations
 

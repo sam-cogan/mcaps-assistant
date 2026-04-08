@@ -1,0 +1,165 @@
+{
+  // User-level MCP server configuration for VS Code.
+  //
+  // Reference copy stored in repo. To install on a new machine:
+  //   1. Run `npm run setup:user` (creates symlinks, dirs, copilot-instructions)
+  //   2. Copy this file to: ~/Library/Application Support/Code/User/mcp.json
+  //   3. Replace placeholders:
+  //        {{REPO_ROOT}}  → absolute path to mcaps-iq repo
+  //        {{VAULT_PATH}} → absolute path to Obsidian vault
+  //        {{HOME}}       → home directory path
+  //
+  // Servers are grouped: general tools, then MCAPS-specific, then M365.
+
+  "servers": {
+
+    // ── General tools ──────────────────────────────────────────────
+
+    "terraform": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "TFE_TOKEN=${input:tfe_token}",
+        "-e", "TFE_ADDRESS=${input:tfe_address}",
+        "hashicorp/terraform-mcp-server:0.4.0"
+      ]
+    },
+    "containerization-assist": {
+      "command": "npx",
+      "args": ["-y", "containerization-assist-mcp", "start"],
+      "env": {
+        "DOCKER_SOCKET": "/var/run/docker.sock",
+        "LOG_LEVEL": "info"
+      },
+      "type": "stdio"
+    },
+    "things": {
+      "command": "{{HOME}}/.venvs/things3-mcp-env/bin/Things3-MCP-server"
+    },
+    "upstash/context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${input:context7_api_key}"
+      },
+      "gallery": "https://api.mcp.github.com/2025-09-15/v0/servers/dcec7705-b81b-4e0f-8615-8032604be7ad",
+      "version": "1.0.0"
+    },
+    "github/github-mcp-server": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "gallery": "https://api.mcp.github.com/2025-09-15/v0/servers/ab12cd34-5678-90ef-1234-567890abcdef",
+      "version": "0.13.0"
+    },
+    "atlassian-mcp-server": {
+      "url": "https://mcp.atlassian.com/v1/mcp",
+      "type": "http"
+    },
+    "microsoftdocs/mcp": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "gallery": "https://api.mcp.github.com/2025-09-15/v0/servers/e0455530-d34a-4795-8dc6-b2888ae76c27",
+      "version": "1.0.0"
+    },
+    "ado": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@azure-devops/mcp", "${input:ado_org}"]
+    },
+    "drawio": {
+      "command": "deno",
+      "args": [
+        "run", "--allow-net", "--allow-read", "--allow-env",
+        "{{HOME}}/repos/drawio-mcp-server/src/index.ts"
+      ]
+    },
+    "AKS MCP": {
+      "command": "{{HOME}}/.vs-kubernetes/tools/aks-mcp/v0.0.9/aks-mcp",
+      "args": ["--transport", "stdio"]
+    },
+    "workiq01": {
+      "command": "npx",
+      "args": ["-y", "@microsoft/workiq@latest", "mcp"],
+      "tools": ["*"]
+    },
+
+    // ── MCAPS IQ servers ───────────────────────────────────────────
+
+    "msx-crm": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["{{REPO_ROOT}}/scripts/msx-start.js"]
+    },
+    "oil": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["{{REPO_ROOT}}/scripts/oil-start.js"]
+    },
+    "excalidraw": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["{{REPO_ROOT}}/mcp/excalidraw/src/index.js"],
+      "env": {
+        "REPO_ROOT": "{{REPO_ROOT}}",
+        "OBSIDIAN_VAULT_PATH": "{{VAULT_PATH}}"
+      }
+    },
+    "powerbi-remote": {
+      "type": "http",
+      "url": "https://api.fabric.microsoft.com/v1/mcp/powerbi"
+    },
+
+    // ── M365 (VS Code only — needs built-in auth provider) ────────
+
+    "calendar": {
+      "type": "http",
+      "url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_CalendarTools",
+      "headers": {}
+    },
+    "teams": {
+      "type": "http",
+      "url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_TeamsServer",
+      "headers": {}
+    },
+    "mail": {
+      "type": "http",
+      "url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_MailTools",
+      "headers": {}
+    },
+    "sharepoint": {
+      "type": "http",
+      "url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_ODSPRemoteServer",
+      "headers": {}
+    },
+    "word": {
+      "type": "http",
+      "url": "https://agent365.svc.cloud.microsoft/agents/tenants/72f988bf-86f1-41af-91ab-2d7cd011db47/servers/mcp_WordServer",
+      "headers": {}
+    }
+  },
+  "inputs": [
+    {
+      "id": "context7_api_key",
+      "type": "promptString",
+      "description": "Context7 API key (optional; increases rate limits). Get one at https://context7.com/dashboard",
+      "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "tfe_token",
+      "description": "Terraform API Token",
+      "password": true
+    },
+    {
+      "type": "promptString",
+      "id": "tfe_address",
+      "description": "Terraform Address",
+      "password": false
+    },
+    {
+      "id": "ado_org",
+      "type": "promptString",
+      "description": "Azure DevOps organization name (e.g. 'contoso')"
+    }
+  ]
+}

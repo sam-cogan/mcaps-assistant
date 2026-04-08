@@ -45,7 +45,7 @@ Microsoft fiscal year starts July 1. Compute the current quarter boundaries from
 
 ### Step 1 — Identify Role + Quarter
 
-1. Read `Reference/MyRoleDescriptions.md` from the Obsidian vault (`oil:search_vault` for "My Role") → determine role and name. If vault is unavailable, fall back to `crm_whoami`. Skip if already known this session.
+1. Read `3.Resources/Role Resources/Role Definition.md` from the Obsidian vault (`oil:search_vault` for "Role Definition") → determine role and name. If vault is unavailable, fall back to `crm_whoami`. Skip if already known this session.
 2. Compute quarter start/end dates from today's date.
 3. Announce: *"Compiling Connects evidence for FY{YY} Q{N} ({start} – {end})."*
 
@@ -88,7 +88,18 @@ Prefer primary-source artifacts over summaries. Preserve source links and timest
 
 #### Lane C — Vault (if available)
 
-Search vault for impact signals and previously captured hooks:
+**C1 — Team Updates Log (Primary Evidence Source)**
+
+The vault file `3. Resources/Team Updates/Team Updates FY{XX}.md` (where `{XX}` is the current fiscal year, e.g. `FY26`) contains a weekly log of all achievements and activity, organized by dated section headers (e.g. `W/C 16th February`). This is the richest single source of what was done and when.
+
+1. Read the team updates file: `oil:read_note({ path: "3. Resources/Team Updates/Team Updates FY{XX}.md" })`.
+2. To scope to the quarter, read individual weekly sections that fall within the quarter's date range using the `section` parameter.
+3. Extract concrete achievements, deliverables, and impact evidence from each week.
+4. Cross-reference extracted items with CRM milestones and M365 evidence (Lanes A & B) to enrich and verify claims.
+
+**C2 — Vault Search + Customer Context**
+
+Search vault for additional impact signals and previously captured hooks:
 - `oil:query_notes({ query: "impact OR improved OR saved OR built OR automated OR onboarded OR resolved OR unblocked", limit: 30, sort: "modified" })` — scoped to quarter dates.
 - `oil:search_vault({ query: "connect hook" })` — find any previously captured hooks.
 - For each active customer: `oil:get_customer_context({ customer })` → scan `## Connect Hooks` and `## Agent Insights` sections.

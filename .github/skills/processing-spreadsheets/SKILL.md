@@ -8,7 +8,7 @@ argument-hint: 'Provide file path and operation: read, create, or modify'
 
 Read, create, and modify `.xlsx` and `.csv` files via Node.js scripts executed in the terminal.
 
-**Output directory**: Save generated `.xlsx`/`.csv` files to `.copilot/docs/` (see `shared-patterns.instructions.md` § Artifact Output Directory). Create the directory with `mkdirSync` before writing.
+**Output directory**: Save generated `.xlsx`/`.csv` files to the Obsidian vault (see `shared-patterns.instructions.md` § Artifact Output Directory). Create directories before writing. Never save into a git repo.
 
 ## Packages
 

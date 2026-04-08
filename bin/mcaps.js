@@ -26,6 +26,21 @@ if (process.env.OBSIDIAN_VAULT) {
   copilotArgs.push("--add-dir", process.env.OBSIDIAN_VAULT);
 }
 
+// Disable MCP servers that require VS Code's built-in auth provider.
+// These use Microsoft's agent365 auth flow which only works inside VS Code.
+// They remain in .vscode/mcp.json for VS Code sessions.
+const vsCodeOnlyServers = [
+  "calendar",
+  "teams",
+  "mail",
+  "sharepoint",
+  "word",
+  "powerbi-remote",
+];
+for (const server of vsCodeOnlyServers) {
+  copilotArgs.push("--disable-mcp-server", server);
+}
+
 copilotArgs.push(...args);
 
 // Try Copilot CLI first
