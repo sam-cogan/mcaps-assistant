@@ -209,4 +209,29 @@ if (VAULT && existsSync(VAULT)) {
   console.log("  · Vault not found — create output dirs manually after configuring vault");
 }
 
+// ── 6. VS Code user-level mcp.json ────────────────────────────────
+console.log("\n6. VS Code user-level mcp.json");
+const vscodeMcpDest = isMac
+  ? join(HOME, "Library", "Application Support", "Code", "User", "mcp.json")
+  : join(HOME, "AppData", "Roaming", "Code", "User", "mcp.json");
+const vscodeMcpTemplate = join(ROOT, "config", "user-mcp.jsonc");
+
+if (existsSync(vscodeMcpDest)) {
+  console.log(`  · ${vscodeMcpDest} — already exists, skipping`);
+  console.log("    To update: copy config/user-mcp.jsonc and replace placeholders");
+} else if (existsSync(vscodeMcpTemplate)) {
+  let content = readFileSync(vscodeMcpTemplate, "utf-8");
+  content = content.replace(/\{\{REPO_ROOT\}\}/g, ROOT);
+  content = content.replace(/\{\{HOME\}\}/g, HOME);
+  content = content.replace(/\{\{VAULT_PATH\}\}/g, VAULT || "REPLACE_WITH_VAULT_PATH");
+  ensureDir(resolve(vscodeMcpDest, ".."));
+  writeFileSync(vscodeMcpDest, content, "utf-8");
+  console.log(`  ✓ Installed to ${vscodeMcpDest}`);
+  if (!VAULT) {
+    console.log("    ⚠ Replace {{VAULT_PATH}} placeholder with your vault path");
+  }
+} else {
+  console.log("  · Template not found at config/user-mcp.jsonc — skipping");
+}
+
 console.log("\n✅ Bootstrap complete. Restart VS Code to pick up changes.\n");
